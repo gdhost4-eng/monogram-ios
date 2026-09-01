@@ -44,6 +44,9 @@ def main() -> int:
         entitlements["application-identifier"] = app_identifier
         entitlements["com.apple.developer.team-identifier"] = arguments.team_id
         entitlements["keychain-access-groups"] = [app_identifier]
+        entitlements["com.apple.security.application-groups"] = [
+            f"group.{arguments.bundle_id}"
+        ]
         entitlements["get-task-allow"] = True
         entitlements["aps-environment"] = "development"
         profile["ApplicationIdentifierPrefix"] = [arguments.team_id]
