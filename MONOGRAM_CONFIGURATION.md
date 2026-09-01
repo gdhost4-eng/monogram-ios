@@ -47,7 +47,7 @@ python3 build-system/Make/Make.py \
 
 ## Сборка с Windows через GitHub Actions
 
-GitHub Actions выполняет сборку на macOS 26 с Xcode 26.2, поэтому Windows используется только для подготовки и скачивания результата. Workflow создаёт IPA без provisioning profile; PlumeImpactor переподписывает её при установке.
+GitHub Actions выполняет сборку на macOS 26 с Xcode 26.2, поэтому Windows используется только для подготовки и скачивания результата. Workflow создаёт IPA без provisioning profile и без встроенных расширений (Siri, Share, уведомления, виджет); PlumeImpactor переподписывает её при установке.
 
 1. Создайте приватный репозиторий GitHub и отправьте в него исходники вместе с изменением workflow.
 

@@ -96,6 +96,7 @@ jobs:
             --configuration=release_arm64 \
             --buildNumber="$BUILD_NUMBER" \
             --disableProvisioningProfiles \
+            --disableExtensions \
             --outputBuildArtifactsPath=build
 
       - name: Upload IPA
