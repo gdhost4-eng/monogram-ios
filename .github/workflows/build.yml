@@ -25,21 +25,36 @@ jobs:
           XCODE_VERSION=$(cat versions.json | python3 -c 'import json,sys;obj=json.load(sys.stdin);print(obj["xcode"]);')
           sudo xcode-select -s /Applications/Xcode_$XCODE_VERSION.app/Contents/Developer
 
-      - name: Restore private Monogram configuration
+      - name: Create unsigned build configuration
         env:
-          MONOGRAM_CONFIGURATION_BASE64: ${{ secrets.MONOGRAM_CONFIGURATION_BASE64 }}
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+
         run: |
-          if [ -z "$MONOGRAM_CONFIGURATION_BASE64" ]; then
-            echo "Missing MONOGRAM_CONFIGURATION_BASE64 repository secret."
+
+
             exit 1
           fi
           python3 - <<'PY'
-          import base64
+          import json
           import os
           from pathlib import Path
 
-          Path("build-system/monogram-development-configuration.json").write_bytes(
-              base64.b64decode(os.environ["MONOGRAM_CONFIGURATION_BASE64"], validate=True)
+          configuration = {
+              "bundle_id": "com.gdhost4.monogram",
+              "api_id": os.environ["TELEGRAM_API_ID"],
+
+              "team_id": "0000000000",
+              "app_center_id": "0",
+              "is_internal_build": "true",
+              "is_appstore_build": "false",
+              "appstore_id": "0",
+              "app_specific_url_scheme": "monogram",
+              "premium_iap_product_id": "",
+              "enable_siri": False,
+              "enable_icloud": False,
+          }
+          Path("build-system/monogram-development-configuration.json").write_text(
+              json.dumps(configuration), encoding="utf-8"
           )
           PY
           python3 scripts/validate_monogram_configuration.py build-system/monogram-development-configuration.json
@@ -80,6 +95,7 @@ jobs:
             --codesigningInformationPath=build-system/fake-codesigning \
             --configuration=release_arm64 \
             --buildNumber="$BUILD_NUMBER" \
+            --disableProvisioningProfiles \
             --outputBuildArtifactsPath=build
 
       - name: Upload IPA

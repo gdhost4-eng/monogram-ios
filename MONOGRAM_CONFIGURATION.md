@@ -47,20 +47,13 @@ python3 build-system/Make/Make.py \
 
 ## Сборка с Windows через GitHub Actions
 
-GitHub Actions выполняет сборку на macOS 26 с Xcode 26.2, поэтому Windows используется только для подготовки и скачивания результата.
+GitHub Actions выполняет сборку на macOS 26 с Xcode 26.2, поэтому Windows используется только для подготовки и скачивания результата. Workflow создаёт IPA без provisioning profile; PlumeImpactor переподписывает её при установке.
 
 1. Создайте приватный репозиторий GitHub и отправьте в него исходники вместе с изменением workflow.
-2. Локально заполните `build-system/monogram-development-configuration.json` собственными `bundle_id`, `api_id`, `api_hash` и `team_id`. Этот файл уже исключён из Git.
-3. В PowerShell из корня репозитория создайте Base64-значение и скопируйте его:
 
-```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes('build-system/monogram-development-configuration.json')) | Set-Clipboard
-```
+3. Откройте **Actions → CI → Run workflow**. После успешного выполнения скачайте `Monogram-IPA-<номер>` из блока **Artifacts**. В архиве находится `Telegram.ipa`.
 
-4. В GitHub откройте **Settings → Secrets and variables → Actions → New repository secret**, задайте имя `MONOGRAM_CONFIGURATION_BASE64` и вставьте значение из буфера.
-5. Откройте **Actions → CI → Run workflow**. После успешного выполнения скачайте `Monogram-IPA-<номер>` из блока **Artifacts**. В архиве находится `Telegram.ipa`.
-
-IPA собирается с временной CI-подписью. PlumeImpactor при установке переподпишет его вашим Apple ID или сертификатом.
+PlumeImpactor при установке подпишет IPA вашим Apple ID или сертификатом.
 
 ## Branding
 

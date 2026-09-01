@@ -490,7 +490,7 @@ def resolve_codesigning(arguments, base_path, build_configuration, provisioning_
     )
 
 
-def resolve_configuration(base_path, bazel_command_line: BazelCommandLine, arguments, additional_codesigning_output_path):
+def resolve_configuration(base_path, bazel_command_line: BazelCommandLine, arguments, additional_codesigning_output_path, disable_provisioning_profiles=False):
     configuration_repository_path = '{}/build-input/configuration-repository'.format(base_path)
     os.makedirs(configuration_repository_path, exist_ok=True)
 
@@ -510,16 +510,25 @@ def resolve_configuration(base_path, bazel_command_line: BazelCommandLine, argum
         shutil.rmtree(provisioning_path)
     os.makedirs(provisioning_path, exist_ok=True)
 
-    codesigning_data = resolve_codesigning(
-        arguments=arguments,
-        base_path=base_path,
-        build_configuration=build_configuration,
-        provisioning_profiles_path=provisioning_path,
-        additional_codesigning_output_path=additional_codesigning_output_path
-    )
-    if codesigning_data.aps_environment is None:
-        print('Could not find a valid aps-environment entitlement in the provided provisioning profiles')
-        sys.exit(1)
+    if disable_provisioning_profiles:
+        # An unsigned IPA is intended to be re-signed by a sideloading tool.
+        # Avoid loading certificates and provisioning profiles entirely, while
+        # still providing a deterministic APNs value for generated entitlements.
+        codesigning_data = ResolvedCodesigningData(
+            aps_environment='development',
+            use_xcode_managed_codesigning=False
+        )
+    else:
+        codesigning_data = resolve_codesigning(
+            arguments=arguments,
+            base_path=base_path,
+            build_configuration=build_configuration,
+            provisioning_profiles_path=provisioning_path,
+            additional_codesigning_output_path=additional_codesigning_output_path
+        )
+        if codesigning_data.aps_environment is None:
+            print('Could not find a valid aps-environment entitlement in the provided provisioning profiles')
+            sys.exit(1)
 
     if bazel_command_line is not None:
         build_configuration.write_to_variables_file(bazel_path=bazel_command_line.bazel, use_xcode_managed_codesigning=codesigning_data.use_xcode_managed_codesigning, aps_environment=codesigning_data.aps_environment, path=configuration_repository_path + '/variables.bzl')
@@ -671,11 +680,15 @@ def build(bazel, arguments):
     elif arguments.cacheHost is not None:
         bazel_command_line.add_remote_cache(arguments.cacheHost)
 
+    if arguments.disableProvisioningProfiles:
+        bazel_command_line.set_disable_provisioning_profiles()
+
     resolve_configuration(
         base_path=os.getcwd(),
         bazel_command_line=bazel_command_line,
         arguments=arguments,
-        additional_codesigning_output_path=None
+        additional_codesigning_output_path=None,
+        disable_provisioning_profiles=arguments.disableProvisioningProfiles
     )
 
     bazel_command_line.set_configuration(arguments.configuration)
@@ -1091,6 +1104,12 @@ if __name__ == '__main__':
         required=False,
         help='Store IPA and DSYM at the specified path after a successful build.',
         metavar='arguments'
+    )
+    buildParser.add_argument(
+        '--disableProvisioningProfiles',
+        action='store_true',
+        default=False,
+        help='Build an unsigned IPA without loading certificates or provisioning profiles.'
     )
     buildParser.add_argument(
         '--lock',
