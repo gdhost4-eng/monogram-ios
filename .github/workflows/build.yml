@@ -67,6 +67,9 @@ jobs:
             --output build-system/unsigned-codesigning/profiles/Telegram.mobileprovision
           python3 scripts/validate_monogram_configuration.py build-system/monogram-development-configuration.json
 
+      - name: Validate Monogram Bazel dependencies
+        run: python3 build-system/Make/ValidateMonogramDependencies.py
+
       - name: Create canonical source directory
         run: |
           set -x

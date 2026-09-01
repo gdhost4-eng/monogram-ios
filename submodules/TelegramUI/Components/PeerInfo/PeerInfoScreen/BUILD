@@ -66,6 +66,8 @@ swift_library(
         "//submodules/Markdown",
         "//submodules/MediaResources",
         "//submodules/MergeLists",
+        "//submodules/MonogramCore:MonogramCore",
+        "//submodules/MonogramUI:MonogramUI",
         "//submodules/TelegramUI/Components/MultiAnimationRenderer",
         "//submodules/TelegramUI/Components/NotificationExceptionsScreen",
         "//submodules/NotificationMuteSettingsUI",
