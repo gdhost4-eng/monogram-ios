@@ -63,6 +63,8 @@ xcodeproj.bazelrc
 */*.swp
 *.swp
 build-input/*
+build-system/monogram-development-configuration.json
+build-system/monogram-signing/
 **/*.pyc
 *.pyc
 submodules/OpusBinding/SharedHeaders/*
