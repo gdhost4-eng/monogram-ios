@@ -55,7 +55,7 @@ def main() -> int:
             plistlib.dump(profile, destination)
 
         run(
-            "openssl", "pkcs12", "-in", str(arguments.p12), "-nodes",
+            "openssl", "pkcs12", "-legacy", "-in", str(arguments.p12), "-nodes",
             "-passin", "pass:", "-out", str(signing_key)
         )
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
