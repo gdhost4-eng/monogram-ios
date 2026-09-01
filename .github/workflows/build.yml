@@ -57,6 +57,14 @@ jobs:
               json.dumps(configuration), encoding="utf-8"
           )
           PY
+          mkdir -p build-system/unsigned-codesigning/certs
+          cp build-system/fake-codesigning/certs/* build-system/unsigned-codesigning/certs/
+          python3 build-system/Make/CreateUnsignedProvisioningProfile.py \
+            --template build-system/fake-codesigning/profiles/Telegram.mobileprovision \
+            --p12 build-system/fake-codesigning/certs/SelfSigned.p12 \
+            --team-id 0000000000 \
+            --bundle-id com.gdhost4.monogram \
+            --output build-system/unsigned-codesigning/profiles/Telegram.mobileprovision
           python3 scripts/validate_monogram_configuration.py build-system/monogram-development-configuration.json
 
       - name: Create canonical source directory
@@ -87,15 +95,14 @@ jobs:
           echo "BUILD_NUMBER=$(echo $BUILD_NUMBER)" >> $GITHUB_ENV
           echo "APP_VERSION=$(echo $APP_VERSION)" >> $GITHUB_ENV
 
-          python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
+          python3 build-system/Make/ImportCertificates.py --path build-system/unsigned-codesigning/certs
           python3 -u build-system/Make/Make.py \
             --bazelUserRoot="$BAZEL_USER_ROOT" \
             build \
             --configurationPath="build-system/monogram-development-configuration.json" \
-            --codesigningInformationPath=build-system/fake-codesigning \
+            --codesigningInformationPath=build-system/unsigned-codesigning \
             --configuration=release_arm64 \
             --buildNumber="$BUILD_NUMBER" \
-            --disableProvisioningProfiles \
             --disableExtensions \
             --outputBuildArtifactsPath=build
 
