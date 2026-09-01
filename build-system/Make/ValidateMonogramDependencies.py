@@ -26,7 +26,8 @@ def main() -> int:
     errors: list[str] = []
 
     for source in root.rglob("*.swift"):
-        if any(part.startswith(".") for part in source.relative_to(root).parts):
+        source_parts = source.relative_to(root).parts
+        if any(part.startswith(".") or part == "Tests" for part in source_parts):
             continue
         text = source.read_text(encoding="utf-8")
         imported = {
