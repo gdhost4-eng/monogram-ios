@@ -2,12 +2,13 @@ name: Close idle repository
 
 on:
   schedule:
-    # 06:00 Moscow time (UTC+3).
-    - cron: '0 3 * * *'
+    # 06:07 Moscow time (UTC+3): avoid the busiest minute for scheduled runs.
+    - cron: '7 3 * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   close-if-idle:
@@ -52,3 +53,16 @@ jobs:
 
           gh api --method PATCH "repos/$REPOSITORY" -F private=true
           echo "Repository visibility changed to private."
+
+      - name: Report a failed privacy check once
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          title='Автоматизация приватности: ошибка'
+          existing=$(gh issue list --repo "$REPOSITORY" --state open --search "$title in:title" --json number --jq 'length')
+          if [ "$existing" -eq 0 ]; then
+            gh issue create --repo "$REPOSITORY" --title "$title" --body 'Ежедневная проверка видимости репозитория не завершилась. Откройте последний запуск workflow «Close idle repository» в GitHub Actions и проверьте причину.'
+          fi
