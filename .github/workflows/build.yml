@@ -67,6 +67,9 @@ jobs:
       - name: Validate Monogram Bazel dependencies
         run: python3 build-system/Make/ValidateMonogramDependencies.py
 
+      - name: Validate portable source invariants
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+
       - name: Create canonical source directory
         run: |
           set -x

@@ -1,6 +1,6 @@
 # Monogram — состояние проекта
 
-Последнее обновление: 2026-09-01
+Последнее обновление: 2026-09-03
 
 ## Текущая фаза
 
@@ -16,6 +16,7 @@ Phase 0 — технический аудит официальной основ�
 - Требуемый Bazel: `8.4.2`
 - Требуемый macOS: `26`
 - Checkout: shallow clone; все 13 зафиксированных submodules инициализированы.
+- Рабочий HEAD на момент последней локальной статической проверки: `0c1c0fbaf59ebf1d45cb81034b67c3d27baeb11e`; поверх него находятся незакоммиченные изменения текущего этапа.
 
 ## Что подготовлено
 
@@ -37,7 +38,14 @@ Phase 0 — технический аудит официальной основ�
 - Добавлен экран account-local списка закладок с реактивным счётчиком в Advanced Settings и переходом к исходному сообщению через штатную навигацию.
 - Добавлен редактор локальной заметки и тегов закладки: нормализация разделителей, сохранение через Postbox transaction, открытие исходного сообщения и подтверждаемое destructive-удаление.
 - Экран закладок получил реактивный локальный поиск по заметкам и тегам, включая запросы вида `#tag`, с отдельным empty/no-results состоянием.
-- Portable source/configuration checks проверены локально: 12/12 Python unit tests проходят, example template проходит structural validation.
+- Portable source/configuration checks проверены локально: 24/24 Python unit tests проходят, example template проходит structural validation.
+- Стартовый путь AppDelegate разделён на синхронную подготовку окружения, явные состояния `storagePreparation → accountManager → sharedContext → authorized/unauthorized → ready/failed` и привязку authorized/unauthorized UI lifecycle. До готовности отображается placeholder, а watchdog переводит зависший запуск в recovery-экран.
+- Sideload fallback изолирован в `ApplicationStartupEnvironment`, разделён по bundle id и полностью подготавливается до открытия AccountManager. Критические ошибки файловой системы больше не скрываются через `try?`.
+- Устранены намеренный crash при нехватке места, stale auth callbacks, утечка auth loading-overlay, небезопасные `as! NSString` на notification payload и двойное завершение lock/background-wakeup tasks.
+- Повреждённый account `atomic-state` сохраняется в локальном `recovery`-карантине и восстанавливается из legacy metadata без обязательного crash-loop; SQLite/WAL/SHM копируются в карантин до автоматического destructive recovery.
+- Share и Notification Content показывают явное недоступное состояние без App Group; Notification Service гарантированно завершает callback исходным содержимым.
+- Portable source invariants подключены к ручному CI workflow до дорогостоящего этапа IPA-сборки.
+- Общая нормализация и поиск локальных заметок/тегов вынесены в `MonogramLocalMetadata`; bookmark и peer annotation используют одну реализацию.
 
 ## Что пока не проверено
 
@@ -71,6 +79,6 @@ Phase 0 — технический аудит официальной основ�
 
 ## Известные проблемы
 
-- `origin` не настроен: URL репозитория Monogram ещё не предоставлен.
+- `origin` настроен на `https://github.com/gdhost4-eng/monogram.git`.
 - Build status неизвестен до появления совместимого macOS/Xcode-хоста.
 - Любые функциональные статусы в `FEATURE_MATRIX.md` остаются `⚪ not tested` до реальной проверки.

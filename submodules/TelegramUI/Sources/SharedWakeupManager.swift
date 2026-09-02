@@ -365,7 +365,12 @@ public final class SharedWakeupManager {
         self.keepIdleDisposable?.dispose()
         self.pendingBackgroundProcessingTaskTimer?.invalidate()
         self.pendingBackgroundStoryProcessingTaskTimer?.invalidate()
+        if let activeExplicitExtensionTask = self.activeExplicitExtensionTask {
+            self.activeExplicitExtensionTask = nil
+            self.endBackgroundTask(activeExplicitExtensionTask)
+        }
         if let (taskId, _, timer) = self.currentTask {
+            self.currentTask = nil
             timer.invalidate()
             self.endBackgroundTask(taskId)
         }
@@ -1047,15 +1052,12 @@ public final class SharedWakeupManager {
                                 return
                             }
                             
-                            if let actualTaskId {
-                                strongSelf.endBackgroundTask(actualTaskId)
-                                
-                                if let (taskId, _, timer) = strongSelf.currentTask, taskId == actualTaskId {
-                                    timer.invalidate()
-                                    strongSelf.currentTask = nil
-                                }
+                            guard let actualTaskId, let (taskId, _, timer) = strongSelf.currentTask, taskId == actualTaskId else {
+                                return
                             }
-                            
+                            timer.invalidate()
+                            strongSelf.currentTask = nil
+                            strongSelf.endBackgroundTask(actualTaskId)
                             strongSelf.isInBackgroundExtension = false
                             strongSelf.checkTasks()
                         }

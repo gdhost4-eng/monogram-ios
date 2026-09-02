@@ -259,36 +259,26 @@ public func rootPathForBasePath(_ appGroupPath: String) -> String {
     return appGroupPath + "/telegram-data"
 }
 
+public func performAppGroupUpgradesSynchronously(appGroupPath: String, rootPath: String) throws {
+    let _ = appGroupPath
+    let fileManager = FileManager.default
+    let rootUrl = URL(fileURLWithPath: rootPath, isDirectory: true)
+    try fileManager.createDirectory(at: rootUrl, withIntermediateDirectories: true, attributes: nil)
+
+    var resourceValues = URLResourceValues()
+    resourceValues.isExcludedFromBackup = true
+    var mutableRootUrl = rootUrl
+    try mutableRootUrl.setResourceValues(resourceValues)
+}
+
 public func performAppGroupUpgrades(appGroupPath: String, rootPath: String) {
     DispatchQueue.global(qos: .default).async {
-        let _ = try? FileManager.default.createDirectory(at: URL(fileURLWithPath: rootPath), withIntermediateDirectories: true, attributes: nil)
-
-        if let items = FileManager.default.enumerator(at: URL(fileURLWithPath: appGroupPath), includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants], errorHandler: nil) {
-            let allowedDirectories: [String] = [
-                "telegram-data",
-                "Library"
-            ]
-
-            for url in items {
-                guard let url = url as? URL else {
-                    continue
-                }
-                if let isDirectory = try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory, isDirectory {
-                    if !allowedDirectories.contains(url.lastPathComponent) {
-                        let _ = try? FileManager.default.removeItem(at: url)
-                    }
-                }
-            }
+        do {
+            try performAppGroupUpgradesSynchronously(appGroupPath: appGroupPath, rootPath: rootPath)
+        } catch {
+            postboxLog("App group upgrade failed: \(error.localizedDescription)")
+            postboxLogSync()
         }
-    }
-    
-    do {
-        var resourceValues = URLResourceValues()
-        resourceValues.isExcludedFromBackup = true
-        var mutableUrl = URL(fileURLWithPath: rootPath)
-        try mutableUrl.setResourceValues(resourceValues)
-    } catch let e {
-        print("\(e)")
     }
 }
 

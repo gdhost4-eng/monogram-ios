@@ -8,6 +8,25 @@ import TelegramUIPreferences
 import TelegramCallsUI
 import AccountContext
 
+private func notificationManagerInt64Value(_ value: Any?) -> Int64? {
+    if value is Bool {
+        return nil
+    } else if let value = value as? String {
+        return Int64(value)
+    } else if let value = value as? NSNumber {
+        return Int64(value.stringValue)
+    } else {
+        return nil
+    }
+}
+
+private func notificationManagerInt32Value(_ value: Any?) -> Int32? {
+    guard let value = notificationManagerInt64Value(value) else {
+        return nil
+    }
+    return Int32(exactly: value)
+}
+
 private final class PollStateContext {
     let subscribers = Bag<(Bool) -> Void>()
     var disposable: Disposable?
@@ -255,15 +274,12 @@ public final class SharedNotificationManager {
                     shouldPollState = true
                 } else if locKey == "MESSAGE_DELETED" {
                     var peerId: EnginePeer.Id?
-                    if let fromId = payload["from_id"] {
-                        let fromIdValue = fromId as! NSString
-                        peerId = EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: EnginePeer.Id.Id._internalFromInt64Value(Int64(fromIdValue as String) ?? 0))
-                    } else if let fromId = payload["chat_id"] {
-                        let fromIdValue = fromId as! NSString
-                        peerId = EnginePeer.Id(namespace: Namespaces.Peer.CloudGroup, id: EnginePeer.Id.Id._internalFromInt64Value(Int64(fromIdValue as String) ?? 0))
-                    } else if let fromId = payload["channel_id"] {
-                        let fromIdValue = fromId as! NSString
-                        peerId = EnginePeer.Id(namespace: Namespaces.Peer.CloudChannel, id: EnginePeer.Id.Id._internalFromInt64Value(Int64(fromIdValue as String) ?? 0))
+                    if let fromId = notificationManagerInt64Value(payload["from_id"]) {
+                        peerId = EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: EnginePeer.Id.Id._internalFromInt64Value(fromId))
+                    } else if let fromId = notificationManagerInt64Value(payload["chat_id"]) {
+                        peerId = EnginePeer.Id(namespace: Namespaces.Peer.CloudGroup, id: EnginePeer.Id.Id._internalFromInt64Value(fromId))
+                    } else if let fromId = notificationManagerInt64Value(payload["channel_id"]) {
+                        peerId = EnginePeer.Id(namespace: Namespaces.Peer.CloudChannel, id: EnginePeer.Id.Id._internalFromInt64Value(fromId))
                     }
                     if let peerId = peerId {
                         if let messageIds = payload["messages"] as? String {
@@ -319,29 +335,22 @@ public final class SharedNotificationManager {
                     
                     shouldPollState = true
                     
-                    if let fromId = payload["from_id"] {
-                        let fromIdValue = fromId as! NSString
-                        peerId = EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: EnginePeer.Id.Id._internalFromInt64Value(Int64(fromIdValue as String) ?? 0))
-                    } else if let fromId = payload["chat_id"] {
-                        let fromIdValue = fromId as! NSString
-                        peerId = EnginePeer.Id(namespace: Namespaces.Peer.CloudGroup, id: EnginePeer.Id.Id._internalFromInt64Value(Int64(fromIdValue as String) ?? 0))
-                    } else if let fromId = payload["channel_id"] {
-                        let fromIdValue = fromId as! NSString
-                        peerId = EnginePeer.Id(namespace: Namespaces.Peer.CloudChannel, id: EnginePeer.Id.Id._internalFromInt64Value(Int64(fromIdValue as String) ?? 0))
+                    if let fromId = notificationManagerInt64Value(payload["from_id"]) {
+                        peerId = EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: EnginePeer.Id.Id._internalFromInt64Value(fromId))
+                    } else if let fromId = notificationManagerInt64Value(payload["chat_id"]) {
+                        peerId = EnginePeer.Id(namespace: Namespaces.Peer.CloudGroup, id: EnginePeer.Id.Id._internalFromInt64Value(fromId))
+                    } else if let fromId = notificationManagerInt64Value(payload["channel_id"]) {
+                        peerId = EnginePeer.Id(namespace: Namespaces.Peer.CloudChannel, id: EnginePeer.Id.Id._internalFromInt64Value(fromId))
                     }
                     
-                    if let msgId = payload["msg_id"] {
-                        let msgIdValue = msgId as! NSString
-                        if let peerId = peerId {
-                            notificationRequestId = .messageId(EngineMessage.Id(peerId: peerId, namespace: Namespaces.Message.Cloud, id: Int32(msgIdValue.intValue)))
-                        }
-                    } else if let randomId = payload["random_id"] {
-                        let randomIdValue = randomId as! NSString
+                    if let msgId = notificationManagerInt32Value(payload["msg_id"]), let peerId {
+                        notificationRequestId = .messageId(EngineMessage.Id(peerId: peerId, namespace: Namespaces.Message.Cloud, id: msgId))
+                    } else if let randomId = notificationManagerInt64Value(payload["random_id"]) {
                         var peerId: EnginePeer.Id?
                         if let encryptionIdString = payload["encryption_id"] as? String, let encryptionId = Int64(encryptionIdString) {
                             peerId = EnginePeer.Id(namespace: Namespaces.Peer.SecretChat, id: EnginePeer.Id.Id._internalFromInt64Value(encryptionId))
                         }
-                        notificationRequestId = .globallyUniqueId(randomIdValue.longLongValue, peerId)
+                        notificationRequestId = .globallyUniqueId(randomId, peerId)
                     } else {
                         shouldPollState = true
                     }
@@ -349,23 +358,17 @@ public final class SharedNotificationManager {
             } else if let _ = payload["max_id"] {
                 var peerId: EnginePeer.Id?
                 
-                if let fromId = payload["from_id"] {
-                    let fromIdValue = fromId as! NSString
-                    peerId = EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: EnginePeer.Id.Id._internalFromInt64Value(Int64(fromIdValue as String) ?? 0))
-                } else if let fromId = payload["chat_id"] {
-                    let fromIdValue = fromId as! NSString
-                    peerId = EnginePeer.Id(namespace: Namespaces.Peer.CloudGroup, id: EnginePeer.Id.Id._internalFromInt64Value(Int64(fromIdValue as String) ?? 0))
-                } else if let fromId = payload["channel_id"] {
-                    let fromIdValue = fromId as! NSString
-                    peerId = EnginePeer.Id(namespace: Namespaces.Peer.CloudChannel, id: EnginePeer.Id.Id._internalFromInt64Value(Int64(fromIdValue as String) ?? 0))
+                if let fromId = notificationManagerInt64Value(payload["from_id"]) {
+                    peerId = EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: EnginePeer.Id.Id._internalFromInt64Value(fromId))
+                } else if let fromId = notificationManagerInt64Value(payload["chat_id"]) {
+                    peerId = EnginePeer.Id(namespace: Namespaces.Peer.CloudGroup, id: EnginePeer.Id.Id._internalFromInt64Value(fromId))
+                } else if let fromId = notificationManagerInt64Value(payload["channel_id"]) {
+                    peerId = EnginePeer.Id(namespace: Namespaces.Peer.CloudChannel, id: EnginePeer.Id.Id._internalFromInt64Value(fromId))
                 }
                 
                 if let peerId = peerId {
-                    if let msgId = payload["max_id"] {
-                        let msgIdValue = msgId as! NSString
-                        if msgIdValue.intValue != 0 {
-                            readMessageId = EngineMessage.Id(peerId: peerId, namespace: Namespaces.Message.Cloud, id: Int32(msgIdValue.intValue))
-                        }
+                    if let msgId = notificationManagerInt32Value(payload["max_id"]), msgId != 0 {
+                        readMessageId = EngineMessage.Id(peerId: peerId, namespace: Namespaces.Message.Cloud, id: msgId)
                     }
                 }
             }

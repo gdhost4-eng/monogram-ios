@@ -95,3 +95,5 @@ Bookmarks list и editor находятся в `MonogramUI`. Editor пишет n
 ## Failure isolation
 
 Custom settings и локальные функции должны возвращать defaults при повреждённых/неизвестных данных. Ошибка Monogram-функции не должна блокировать авторизацию, синхронизацию, отправку/приём сообщений или открытие основного Telegram UI.
+
+Стартовое окружение разрешается через `ApplicationStartupEnvironment`: App Group используется при наличии entitlement, а sideload-сборка получает изолированный fallback в Application Support. AppDelegate отдельно строит authorized и unauthorized contexts и отдельно управляет их UI lifecycle; изменение одного пути не должно блокировать другой.

@@ -693,7 +693,9 @@ private struct NotificationContent: CustomStringConvertible {
                 interaction.donate(completion: nil)
 
                 do {
-                    content = try content.updating(from: incomingCommunicationIntent) as! UNMutableNotificationContent
+                    if let updatedContent = try content.updating(from: incomingCommunicationIntent) as? UNMutableNotificationContent {
+                        content = updatedContent
+                    }
                 } catch let e {
                     print("Exception: \(e)")
                 }
@@ -966,7 +968,7 @@ private final class NotificationServiceHandler {
                         return
                     }
 
-                    Logger.shared.log("NotificationService \(episode)", "Decrypted payload: \(payloadJson)")
+                    Logger.shared.log("NotificationService \(episode)", "Decrypted payload keys: \(payloadJson.keys.sorted().joined(separator: ","))")
 
                     var peerId: PeerId?
                     var messageId: MessageId.Id?
@@ -2553,6 +2555,18 @@ final class NotificationService: UNNotificationServiceExtension {
     override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
         let episode = String(UInt32.random(in: 0 ..< UInt32.max), radix: 16)
         self.episode = episode
+
+        guard let appBundleIdentifier = Bundle.main.bundleIdentifier,
+              let lastDotRange = appBundleIdentifier.range(of: ".", options: [.backwards]) else {
+            contentHandler(request.content)
+            return
+        }
+        let baseAppBundleId = String(appBundleIdentifier[..<lastDotRange.lowerBound])
+        let appGroupName = "group.\(baseAppBundleId)"
+        guard FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupName) != nil else {
+            contentHandler(request.content)
+            return
+        }
         
         self.initialContent = request.content
         self.contentHandler = contentHandler

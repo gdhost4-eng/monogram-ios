@@ -8,13 +8,35 @@ import BuildConfig
 @available(iOSApplicationExtension 10.0, iOS 10.0, *)
 class NotificationViewController: UIViewController, UNNotificationContentExtension {
     private var impl: NotificationViewControllerImpl?
+
+    private func showUnavailableState() {
+        self.preferredContentSize = CGSize(width: 320.0, height: 120.0)
+        if #available(iOS 13.0, *) {
+            self.view.backgroundColor = .systemBackground
+        } else {
+            self.view.backgroundColor = .white
+        }
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.numberOfLines = 0
+        label.textAlignment = .center
+        label.text = "Notification preview is unavailable because the shared application container is not configured."
+        self.view.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.centerXAnchor.constraint(equalTo: self.view.centerXAnchor),
+            label.centerYAnchor.constraint(equalTo: self.view.centerYAnchor),
+            label.leadingAnchor.constraint(greaterThanOrEqualTo: self.view.leadingAnchor, constant: 24.0),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: self.view.trailingAnchor, constant: -24.0)
+        ])
+    }
     
     override func viewDidLoad() {
         super.viewDidLoad()
         
         if self.impl == nil {
-            let appBundleIdentifier = Bundle.main.bundleIdentifier!
-            guard let lastDotRange = appBundleIdentifier.range(of: ".", options: [.backwards]) else {
+            guard let appBundleIdentifier = Bundle.main.bundleIdentifier,
+                  let lastDotRange = appBundleIdentifier.range(of: ".", options: [.backwards]) else {
+                self.showUnavailableState()
                 return
             }
             
@@ -28,6 +50,7 @@ class NotificationViewController: UIViewController, UNNotificationContentExtensi
             let maybeAppGroupUrl = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupName)
             
             guard let appGroupUrl = maybeAppGroupUrl else {
+                self.showUnavailableState()
                 return
             }
             

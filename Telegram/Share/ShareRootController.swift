@@ -8,6 +8,43 @@ import TelegramCore
 @objc(ShareRootController)
 class ShareRootController: UIViewController {
     private var impl: ShareRootControllerImpl?
+
+    @objc private func closeUnavailableExtension() {
+        self.extensionContext?.cancelRequest(
+            withError: NSError(
+                domain: "Monogram.ShareExtension",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Shared application container is unavailable."]
+            )
+        )
+    }
+
+    private func showUnavailableState() {
+        if #available(iOS 13.0, *) {
+            self.view.backgroundColor = .systemBackground
+        } else {
+            self.view.backgroundColor = .white
+        }
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.numberOfLines = 0
+        label.textAlignment = .center
+        label.text = "Sharing is unavailable because the shared application container is not configured."
+        self.view.addSubview(label)
+        let closeButton = UIButton(type: .system)
+        closeButton.translatesAutoresizingMaskIntoConstraints = false
+        closeButton.setTitle("Close", for: .normal)
+        closeButton.addTarget(self, action: #selector(self.closeUnavailableExtension), for: .touchUpInside)
+        self.view.addSubview(closeButton)
+        NSLayoutConstraint.activate([
+            label.centerXAnchor.constraint(equalTo: self.view.centerXAnchor),
+            label.centerYAnchor.constraint(equalTo: self.view.centerYAnchor),
+            label.leadingAnchor.constraint(greaterThanOrEqualTo: self.view.leadingAnchor, constant: 24.0),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: self.view.trailingAnchor, constant: -24.0),
+            closeButton.centerXAnchor.constraint(equalTo: self.view.centerXAnchor),
+            closeButton.topAnchor.constraint(equalTo: label.bottomAnchor, constant: 20.0)
+        ])
+    }
     
     override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
         super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
@@ -23,8 +60,9 @@ class ShareRootController: UIViewController {
         super.loadView()
         
         if self.impl == nil {
-            let appBundleIdentifier = Bundle.main.bundleIdentifier!
-            guard let lastDotRange = appBundleIdentifier.range(of: ".", options: [.backwards]) else {
+            guard let appBundleIdentifier = Bundle.main.bundleIdentifier,
+                  let lastDotRange = appBundleIdentifier.range(of: ".", options: [.backwards]) else {
+                self.showUnavailableState()
                 return
             }
             
@@ -38,6 +76,7 @@ class ShareRootController: UIViewController {
             let maybeAppGroupUrl = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupName)
             
             guard let appGroupUrl = maybeAppGroupUrl else {
+                self.showUnavailableState()
                 return
             }
             

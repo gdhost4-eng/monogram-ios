@@ -20,27 +20,18 @@ public struct MonogramBookmark: Codable, Equatable {
         self.id = id
         self.messageId = messageId
 
-        let trimmedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.note = trimmedNote?.isEmpty == false ? trimmedNote : nil
+        self.note = MonogramLocalMetadata.normalizedNote(note)
         self.tags = MonogramTag.normalize(tags)
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
 
     public func matches(query: String, tags requiredTags: [String] = []) -> Bool {
-        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-        let normalizedRequiredTags = MonogramTag.normalize(requiredTags)
-
-        if !normalizedRequiredTags.allSatisfy({ self.tags.contains($0) }) {
-            return false
-        }
-        if normalizedQuery.isEmpty {
-            return true
-        }
-
-        let searchableValues = [self.note ?? ""] + self.tags + self.tags.map { "#\($0)" }
-        return searchableValues.contains(where: { value in
-            return value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current).contains(normalizedQuery)
-        })
+        return MonogramLocalMetadata.matches(
+            note: self.note,
+            tags: self.tags,
+            query: query,
+            requiredTags: requiredTags
+        )
     }
 }

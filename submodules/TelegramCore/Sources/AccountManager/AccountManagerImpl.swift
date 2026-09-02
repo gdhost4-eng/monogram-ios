@@ -2,6 +2,27 @@ import Foundation
 import SwiftSignalKit
 import Postbox
 
+private func quarantineAccountManagerFile(atPath path: String) -> Bool {
+    let fileManager = FileManager.default
+    guard fileManager.fileExists(atPath: path) else {
+        return true
+    }
+    let sourceUrl = URL(fileURLWithPath: path)
+    let recoveryUrl = sourceUrl.deletingLastPathComponent().appendingPathComponent("recovery", isDirectory: true)
+    do {
+        try fileManager.createDirectory(at: recoveryUrl, withIntermediateDirectories: true)
+        let destinationUrl = recoveryUrl.appendingPathComponent("\(sourceUrl.lastPathComponent)-\(UUID().uuidString)")
+        try fileManager.copyItem(at: sourceUrl, to: destinationUrl)
+        postboxLog("Quarantined invalid account metadata file as \(destinationUrl.lastPathComponent)")
+        postboxLogSync()
+        return true
+    } catch {
+        postboxLog("Could not quarantine invalid account metadata file: \(error.localizedDescription)")
+        postboxLogSync()
+        return false
+    }
+}
+
 public protocol AccountManagerTypes {
     associatedtype Attribute: AccountRecordAttribute
 }
@@ -72,7 +93,7 @@ final class AccountManagerImpl<Types: AccountManagerTypes> {
         } catch let e {
             postboxLog("decode atomic state error: \(e)")
             postboxLogSync()
-            preconditionFailure()
+            return ([], nil)
         }
     }
     
@@ -127,9 +148,18 @@ final class AccountManagerImpl<Types: AccountManagerTypes> {
                 postboxLogSync()
                 
                 if removeDatabaseOnError {
-                    let _ = try? FileManager.default.removeItem(atPath: self.atomicStatePath)
+                    guard quarantineAccountManagerFile(atPath: self.atomicStatePath) else {
+                        preconditionFailure("Could not preserve invalid account metadata")
+                    }
+                    var legacyRecordDict: [AccountRecordId: AccountRecord<Types.Attribute>] = [:]
+                    for record in self.legacyRecordTable.getRecords() {
+                        legacyRecordDict[record.id] = record
+                    }
+                    self.currentAtomicState = AccountManagerAtomicState(records: legacyRecordDict, currentRecordId: self.legacyMetadataTable.getCurrentAccountId(), currentAuthRecord: self.legacyMetadataTable.getCurrentAuthAccount(), accessChallengeData: self.legacyMetadataTable.getAccessChallengeData())
+                    self.syncAtomicStateToFile()
+                } else {
+                    preconditionFailure()
                 }
-                preconditionFailure()
             }
         } catch let e {
             postboxLog("load atomic state error: \(e)")

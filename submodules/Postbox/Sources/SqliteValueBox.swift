@@ -59,7 +59,9 @@ struct SqlitePreparedStatement {
             if res == SQLITE_CORRUPT {
                 if let path = pathToRemoveOnError {
                     postboxLog("Corrupted DB at step, dropping")
-                    try? FileManager.default.removeItem(atPath: path)
+                    if quarantineSqliteDatabase(databasePath: path) {
+                        try? FileManager.default.removeItem(atPath: path)
+                    }
                     postboxLogSync()
                     preconditionFailure()
                 }
@@ -84,7 +86,9 @@ struct SqlitePreparedStatement {
             if res == SQLITE_CORRUPT {
                 if let path = pathToRemoveOnError {
                     postboxLog("Corrupted DB at step, dropping")
-                    try? FileManager.default.removeItem(atPath: path)
+                    if quarantineSqliteDatabase(databasePath: path) {
+                        try? FileManager.default.removeItem(atPath: path)
+                    }
                     postboxLogSync()
                     preconditionFailure()
                 }
@@ -154,6 +158,36 @@ private let databaseFileNames: [String] = [
     "db_sqlite-shm",
     "db_sqlite-wal"
 ]
+
+@discardableResult
+private func quarantineSqliteDatabase(databasePath: String) -> Bool {
+    let fileManager = FileManager.default
+    let databaseUrl = URL(fileURLWithPath: databasePath)
+    let baseUrl = databaseUrl.deletingLastPathComponent()
+    let existingFiles = databaseFileNames.compactMap { fileName -> URL? in
+        let url = baseUrl.appendingPathComponent(fileName)
+        return fileManager.fileExists(atPath: url.path) ? url : nil
+    }
+    guard !existingFiles.isEmpty else {
+        return true
+    }
+
+    let recoveryUrl = baseUrl.appendingPathComponent("recovery", isDirectory: true)
+        .appendingPathComponent("sqlite-\(UUID().uuidString)", isDirectory: true)
+    do {
+        try fileManager.createDirectory(at: recoveryUrl, withIntermediateDirectories: true)
+        for sourceUrl in existingFiles {
+            try fileManager.copyItem(at: sourceUrl, to: recoveryUrl.appendingPathComponent(sourceUrl.lastPathComponent))
+        }
+        postboxLog("Quarantined sqlite database as \(recoveryUrl.lastPathComponent)")
+        postboxLogSync()
+        return true
+    } catch {
+        postboxLog("Could not quarantine sqlite database: \(error.localizedDescription)")
+        postboxLogSync()
+        return false
+    }
+}
 
 private struct TablePairKey: Hashable {
     let table1: Int32
@@ -306,7 +340,9 @@ public final class SqliteValueBox: ValueBox {
             }
             
             if self.removeDatabaseOnError {
-                let _ = try? FileManager.default.removeItem(atPath: path)
+                if quarantineSqliteDatabase(databasePath: path) {
+                    let _ = try? FileManager.default.removeItem(atPath: path)
+                }
             }
             postboxLogSync()
             preconditionFailure("Couldn't open database")
@@ -346,6 +382,9 @@ public final class SqliteValueBox: ValueBox {
                         return nil
                     }
                     
+                    guard quarantineSqliteDatabase(databasePath: path) else {
+                        return nil
+                    }
                     for fileName in databaseFileNames {
                         let _ = try? FileManager.default.removeItem(atPath: basePath + "/\(fileName)")
                     }
@@ -365,7 +404,9 @@ public final class SqliteValueBox: ValueBox {
                     return nil
                 }
                 
-                assert(false)
+                guard quarantineSqliteDatabase(databasePath: path) else {
+                    return nil
+                }
                 for fileName in databaseFileNames {
                     let _ = try? FileManager.default.removeItem(atPath: basePath + "/\(fileName)")
                 }
@@ -399,6 +440,9 @@ public final class SqliteValueBox: ValueBox {
                 if self.isEncrypted(database) {
                     postboxLog("Reencryption failed")
                     
+                    guard quarantineSqliteDatabase(databasePath: path) else {
+                        return nil
+                    }
                     for fileName in databaseFileNames {
                         let _ = try? FileManager.default.removeItem(atPath: basePath + "/\(fileName)")
                     }
@@ -426,6 +470,9 @@ public final class SqliteValueBox: ValueBox {
                         return nil
                     }
                     
+                    guard quarantineSqliteDatabase(databasePath: path) else {
+                        return nil
+                    }
                     for fileName in databaseFileNames {
                         let _ = try? FileManager.default.removeItem(atPath: basePath + "/\(fileName)")
                     }
@@ -577,7 +624,9 @@ public final class SqliteValueBox: ValueBox {
             if allIsOk.with({ $0 }) == false {
                 postboxLog("Timeout reached, discarding database")
                 if removeDatabaseOnError {
-                    try? FileManager.default.removeItem(atPath: databasePath)
+                    if quarantineSqliteDatabase(databasePath: databasePath) {
+                        try? FileManager.default.removeItem(atPath: databasePath)
+                    }
                 }
 
                 postboxLogSync()
