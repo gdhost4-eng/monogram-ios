@@ -1,0 +1,54 @@
+name: Close idle repository
+
+on:
+  schedule:
+    # 06:00 Moscow time (UTC+3).
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  close-if-idle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Make the repository private when no work is visible on GitHub
+        env:
+          GH_TOKEN: ${{ secrets.REPOSITORY_ADMIN_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$GH_TOKEN" ]; then
+            echo "REPOSITORY_ADMIN_TOKEN is not configured."
+            exit 1
+          fi
+
+          # The build workflow is the only long-running remote work in this repository.
+          in_progress=$(gh api "repos/$REPOSITORY/actions/workflows/build.yml/runs?status=in_progress&per_page=1" --jq '.total_count')
+          queued=$(gh api "repos/$REPOSITORY/actions/workflows/build.yml/runs?status=queued&per_page=1" --jq '.total_count')
+          if [ "$in_progress" -gt 0 ] || [ "$queued" -gt 0 ]; then
+            echo "A Monogram IPA build is active or queued; retaining public visibility."
+            exit 0
+          fi
+
+          # Keep the repository open briefly after a visible GitHub change.
+          cutoff=$(date -u -d '2 hours ago' +%s)
+          latest_commit=$(gh api "repos/$REPOSITORY/commits/master" --jq '.commit.committer.date')
+          latest_pr=$(gh api "repos/$REPOSITORY/pulls?state=open&sort=updated&direction=desc&per_page=1" --jq '.[0].updated_at // empty')
+          for timestamp in "$latest_commit" "$latest_pr"; do
+            if [ -n "$timestamp" ] && [ "$(date -u -d "$timestamp" +%s)" -ge "$cutoff" ]; then
+              echo "Recent GitHub activity found; retaining public visibility."
+              exit 0
+            fi
+          done
+
+          is_private=$(gh api "repos/$REPOSITORY" --jq '.private')
+          if [ "$is_private" = true ]; then
+            echo "Repository is already private."
+            exit 0
+          fi
+
+          gh api --method PATCH "repos/$REPOSITORY" -F private=true
+          echo "Repository visibility changed to private."
