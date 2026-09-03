@@ -257,8 +257,10 @@ NSArray * TGQueryStringComponentsFromKeyAndArrayValue(NSString *key, NSArray *va
 
 + (MTSignal *)_googleMapsLocationForURL:(NSURL *)url
 {
+    NSString *shortenerUrl = [NSString stringWithFormat:@"%@?shortUrl=%@",
+        TGShareGoogleShortenerEndpointUrl,
+        TGURLEncodedStringFromStringWithEncoding(url.absoluteString, NSUTF8StringEncoding)];
 
-    
     MTSignal *shortenerSignal = [[MTHttpRequestOperation dataForHttpUrl:[NSURL URLWithString:shortenerUrl]] mapToSignal:^MTSignal *(MTHttpResponse *response)
         {
         NSData *data = response.data;
