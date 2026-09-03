@@ -86,6 +86,7 @@ xcode-files
 **/node_modules/
 tools/sim-watcher/dist/
 .mcp.json
+.codex-worktrees/
 # Local project instructions and documentation are intentionally not published.
 /*.md
 /docs/
