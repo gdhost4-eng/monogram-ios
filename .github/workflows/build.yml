@@ -27,10 +27,12 @@ jobs:
       - name: Create unsigned build configuration
         env:
           TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
 
         run: |
-
-
+          set -euo pipefail
+          if [ -z "$TELEGRAM_API_ID" ] || [ -z "$TELEGRAM_API_HASH" ]; then
+            echo "TELEGRAM_API_ID and TELEGRAM_API_HASH secrets must be configured."
             exit 1
           fi
           python3 - <<'PY'
@@ -41,6 +43,7 @@ jobs:
           configuration = {
               "bundle_id": "com.gdhost4.monogram",
               "api_id": os.environ["TELEGRAM_API_ID"],
+              "api_hash": os.environ["TELEGRAM_API_HASH"],
 
               "team_id": "0000000000",
               "app_center_id": "0",
@@ -56,7 +59,7 @@ jobs:
               json.dumps(configuration), encoding="utf-8"
           )
           PY
-          mkdir -p build-system/unsigned-codesigning/certs
+          mkdir -p build-system/unsigned-codesigning/certs build-system/unsigned-codesigning/profiles
           cp build-system/fake-codesigning/certs/* build-system/unsigned-codesigning/certs/
           python3 build-system/Make/CreateUnsignedProvisioningProfile.py \
             --template build-system/fake-codesigning/profiles/Telegram.mobileprovision \
