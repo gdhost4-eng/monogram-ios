@@ -1,5 +1,6 @@
 import Foundation
 import Postbox
+import SwiftSignalKit
 import TelegramCore
 
 public struct MonogramMessageRevision: Codable, Equatable {
