@@ -50,7 +50,7 @@ public func captureMonogramMessageEdits(
     accountPeerId: PeerId,
     timestamp: Int64 = Int64(Date().timeIntervalSince1970)
 ) {
-    guard MonogramRuntimePolicy.isEnabled(.preserveEditHistory, accountPeerId: accountPeerId) else {
+    guard monogramAccountSettings(transaction: transaction).isEnabled(.preserveEditHistory) else {
         return
     }
     for (previous, updated) in updates {

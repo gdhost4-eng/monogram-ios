@@ -850,6 +850,26 @@ func infoItems(
         }
     }
     
+    if let peerId = data.peer?.id, !isMyProfile,
+       MonogramLocalDataPolicy.allowsPeerAnnotation(peerId: peerId) {
+        let settings = MonogramRuntimePolicy.settings(accountPeerId: context.account.peerId)
+        if settings.isGhostModeActive() || settings.ghostModeExcludedPeerIds.contains(peerId.toInt64()) {
+            items[.peerInfoTrailing]!.append(PeerInfoScreenSwitchItem(id: 0x4d4f4f, text: "Исключить чат из Ghost Mode", value: settings.ghostModeExcludedPeerIds.contains(peerId.toInt64()), icon: PresentationResourcesSettings.settings, isLocked: false, toggled: { excluded in
+                let _ = (updateMonogramAccountSettingsInteractively(postbox: context.account.postbox, { settings in
+                    var settings = settings
+                    settings.ghostModeExcludedPeerIds.removeAll(where: { $0 == peerId.toInt64() })
+                    if excluded {
+                        settings.ghostModeExcludedPeerIds.append(peerId.toInt64())
+                    }
+                    MonogramRuntimePolicy.update(accountPeerId: context.account.peerId, settings: settings)
+                    return settings
+                }) |> deliverOnMainQueue).start(completed: {
+                    interaction.requestLayout(false)
+                })
+            }))
+        }
+    }
+
     if let peerId = data.peer?.id,
        MonogramRuntimePolicy.isEnabled(.localNotes, accountPeerId: context.account.peerId),
        MonogramLocalDataPolicy.allowsPeerAnnotation(peerId: peerId) {

@@ -19,7 +19,7 @@ public enum MonogramDeletedMessageTransform {
         for message in messages where message.id.namespace == Namespaces.Message.MonogramLocal {
             transaction.removeOrderedItemListItem(collectionId: self.collectionId, itemId: self.itemId(message.id))
         }
-        guard MonogramRuntimePolicy.isEnabled(.preserveDeletedMessages, accountPeerId: accountPeerId) else {
+        guard monogramAccountSettings(transaction: transaction).isEnabled(.preserveDeletedMessages) else {
             return [:]
         }
 
@@ -55,7 +55,9 @@ public enum MonogramDeletedMessageTransform {
             flags.remove(.Sending)
             flags.remove(.Failed)
             flags.remove(.ReactionsArePossible)
-            let localIdValue = message.id.id == 0 ? -1 : -abs(message.id.id)
+            // The namespace already isolates these IDs from server messages.
+            // History lookups use nonnegative ID bounds.
+            let localIdValue = max(1, message.id.id)
             let localId = MessageId(peerId: message.id.peerId, namespace: Namespaces.Message.MonogramLocal, id: localIdValue)
             let preservedMedia: [Media] = message.media.compactMap { media in
                 if let file = media as? TelegramMediaFile {

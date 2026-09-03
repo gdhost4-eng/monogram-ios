@@ -5,6 +5,29 @@ import TelegramCore
 import MonogramCore
 
 final class MonogramCoreTests: XCTestCase {
+    func testBookmarkRoundTripsThroughPostboxIncludingUUID() throws {
+        let peerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(123))
+        for tags in [[], ["tag"]] as [[String]] {
+            let bookmark = MonogramBookmark(messageId: MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: 42), note: "note", tags: tags, createdAt: 100, updatedAt: 200)
+            let entry = try XCTUnwrap(CodableEntry(bookmark))
+            XCTAssertEqual(entry.get(MonogramBookmark.self), bookmark)
+            let json = try JSONEncoder().encode(bookmark)
+            XCTAssertEqual(try JSONDecoder().decode(MonogramBookmark.self, from: json), bookmark)
+        }
+    }
+
+    func testAnnotationAndEditHistoryRoundTripThroughPostbox() throws {
+        let peerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(123))
+        for tags in [[], ["tag"]] as [[String]] {
+            let annotation = MonogramPeerAnnotation(peerId: peerId, note: "note", tags: tags, createdAt: 100, updatedAt: 200)
+            let entry = try XCTUnwrap(CodableEntry(annotation))
+            XCTAssertEqual(entry.get(MonogramPeerAnnotation.self), annotation)
+        }
+        let history = MonogramEditHistory(messageId: MessageId(peerId: peerId, namespace: Namespaces.Message.Cloud, id: 42), revisions: [MonogramMessageRevision(text: "before", capturedAt: 100), MonogramMessageRevision(text: "after", capturedAt: 200)])
+        let entry = try XCTUnwrap(CodableEntry(history))
+        XCTAssertEqual(entry.get(MonogramEditHistory.self), history)
+    }
+
     func testFeatureRegistryContainsEveryIdentifierExactlyOnce() {
         let identifiers = MonogramFeatureRegistry.all.map(\.id)
         XCTAssertEqual(Set(identifiers).count, identifiers.count)

@@ -124,6 +124,7 @@ public func monogramAdvancedSettingsController(context: AccountContext) -> ViewC
         monogramPeerAnnotations(postbox: context.account.postbox) |> map { $0.count } |> distinctUntilChanged,
         MonogramDeletedMessageTransform.records(postbox: context.account.postbox) |> map { $0.count } |> distinctUntilChanged
     )
+    |> deliverOnMainQueue
     |> map { presentationData, settingsAndTimestamp, bookmarksCount, annotationsCount, deletedCount -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let presentationData = presentationData.withUpdated(theme: presentationData.theme.withModalBlocksBackground())
 

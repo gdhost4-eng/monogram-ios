@@ -42,6 +42,10 @@ public func monogramAccountSettings(postbox: Postbox) -> Signal<MonogramSettings
     |> distinctUntilChanged
 }
 
+public func monogramAccountSettings(transaction: Transaction) -> MonogramSettings {
+    return (transaction.getPreferencesEntry(key: MonogramSettingsKeys.account)?.get(MonogramSettings.self) ?? MonogramSettings()).migratedToCurrentSchema()
+}
+
 public func updateMonogramAccountSettingsInteractively(
     postbox: Postbox,
     _ f: @escaping (MonogramSettings) -> MonogramSettings

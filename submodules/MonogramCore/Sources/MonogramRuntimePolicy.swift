@@ -27,6 +27,12 @@ public enum MonogramRuntimePolicy {
         return settings?.isEnabled(id) ?? MonogramFeatureRegistry.descriptor(for: id).defaultValue
     }
 
+    public static func settings(accountPeerId: PeerId) -> MonogramSettings {
+        self.lock.lock()
+        defer { self.lock.unlock() }
+        return self.accountSettings[accountPeerId] ?? MonogramSettings()
+    }
+
     private static func activeGhostSettings(accountPeerId: PeerId, peerId: PeerId?) -> MonogramSettings? {
         self.lock.lock()
         let settings = self.accountSettings[accountPeerId]

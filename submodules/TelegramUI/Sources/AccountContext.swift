@@ -318,24 +318,28 @@ public final class AccountContextImpl: AccountContext {
         self.account.stateManager.starsContext = self.starsContext
         self.account.stateManager.tonContext = self.starsContext
 
-        self.monogramSettingsDisposable = (monogramAccountSettings(postbox: account.postbox)
-        |> deliverOnMainQueue).startStrict(next: { [weak account] settings in
-            guard let account else {
-                return
+        if !temp {
+            // Temporary contexts share the same Postbox and must not own or
+            // tear down the account-wide preservation hooks.
+            self.monogramSettingsDisposable = (monogramAccountSettings(postbox: account.postbox)
+            |> deliverOnMainQueue).startStrict(next: { [weak account] settings in
+                guard let account else {
+                    return
+                }
+                MonogramRuntimePolicy.update(accountPeerId: account.peerId, settings: settings)
+            })
+            account.postbox.setMessageDeletionTransform { [weak account] messages, transaction in
+                guard let account else {
+                    return [:]
+                }
+                return MonogramDeletedMessageTransform.transform(messages: messages, transaction: transaction, accountPeerId: account.peerId, mediaBox: account.postbox.mediaBox)
             }
-            MonogramRuntimePolicy.update(accountPeerId: account.peerId, settings: settings)
-        })
-        account.postbox.setMessageDeletionTransform { [weak account] messages, transaction in
-            guard let account else {
-                return [:]
+            account.postbox.setMessageUpdateObserver { [weak account] updates, transaction in
+                guard let account else {
+                    return
+                }
+                captureMonogramMessageEdits(transaction: transaction, updates: updates, accountPeerId: account.peerId)
             }
-            return MonogramDeletedMessageTransform.transform(messages: messages, transaction: transaction, accountPeerId: account.peerId, mediaBox: account.postbox.mediaBox)
-        }
-        account.postbox.setMessageUpdateObserver { [weak account] updates, transaction in
-            guard let account else {
-                return
-            }
-            captureMonogramMessageEdits(transaction: transaction, updates: updates, accountPeerId: account.peerId)
         }
                 
         self.cachedGroupCallContexts = AccountGroupCallContextCacheImpl()
@@ -533,10 +537,12 @@ public final class AccountContextImpl: AccountContext {
         self.appConfigurationDisposable?.dispose()
         self.countriesConfigurationDisposable?.dispose()
         self.experimentalUISettingsDisposable?.dispose()
-        self.monogramSettingsDisposable?.dispose()
-        self.account.postbox.setMessageDeletionTransform(nil)
-        self.account.postbox.setMessageUpdateObserver(nil)
-        MonogramRuntimePolicy.remove(accountPeerId: self.account.peerId)
+        if let monogramSettingsDisposable = self.monogramSettingsDisposable {
+            monogramSettingsDisposable.dispose()
+            self.account.postbox.setMessageDeletionTransform(nil)
+            self.account.postbox.setMessageUpdateObserver(nil)
+            MonogramRuntimePolicy.remove(accountPeerId: self.account.peerId)
+        }
         self.animatedEmojiStickersDisposable?.dispose()
         self.userLimitsConfigurationDisposable?.dispose()
         self.peerNameColorsConfigurationDisposable?.dispose()

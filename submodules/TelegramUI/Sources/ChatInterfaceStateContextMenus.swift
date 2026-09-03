@@ -56,7 +56,6 @@ private struct MonogramMessageContextData {
     let areLocalPinsEnabled: Bool
     let showsPowerUserInformation: Bool
     let ghostModeEnabled: Bool
-    let ghostExcludesPeer: Bool
     let bookmark: MonogramBookmark?
     let editHistory: MonogramEditHistory?
 }
@@ -112,16 +111,21 @@ private func monogramEditHistoryEntries(revisions: [MonogramMessageRevision], cu
     }
     versions.append((text: currentText, timestamp: Int64(currentTimestamp), isCurrent: true))
 
-    return versions.enumerated().map { index, version in
+    var entries: [MonogramEditHistoryEntry] = versions.enumerated().map { index, version in
         let date = formatter.string(from: Date(timeIntervalSince1970: TimeInterval(version.timestamp)))
         let title = version.isCurrent ? "Текущая версия" : "Версия \(index + 1)"
         let text = version.text.isEmpty ? "[без текста]" : version.text
         return .revision(index: index, text: "\(title) · \(date)\n\(text)")
     }
+    if revisions.isEmpty {
+        entries.append(.revision(index: entries.count, text: "Предыдущие версии не сохранены на этом устройстве. Включите сохранение истории изменений в настройках Monogram; оно действует на последующие правки полученных сообщений."))
+    }
+    return entries
 }
 
 private func monogramEditHistoryController(context: AccountContext, revisions: [MonogramMessageRevision], currentText: String, currentTimestamp: Int32) -> ViewController {
     let state = context.sharedContext.presentationData
+    |> deliverOnMainQueue
     |> map { presentationData -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let entries = monogramEditHistoryEntries(revisions: revisions, currentText: currentText, currentTimestamp: currentTimestamp)
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Изменения"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
@@ -987,9 +991,8 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             areLocalPinsEnabled: settings.isEnabled(.localMessagePins),
             showsPowerUserInformation: settings.isEnabled(.powerUserInformation),
             ghostModeEnabled: settings.isGhostModeActive(),
-            ghostExcludesPeer: settings.ghostModeExcludedPeerIds.contains(messages[0].id.peerId.toInt64()),
             bookmark: bookmark,
-            editHistory: settings.isEnabled(.preserveEditHistory) ? editHistory : nil
+            editHistory: editHistory
         )
     }
 
@@ -2090,18 +2093,20 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             })))
         }
 
-        if messages.count == 1, let editHistory = monogramData.editHistory, !editHistory.revisions.isEmpty {
-            actions.append(.action(ContextMenuActionItem(text: "Изменения (\(editHistory.revisions.count + 1))", icon: { theme in
+        if messages.count == 1, message.id.namespace == Namespaces.Message.Cloud,
+           monogramData.editHistory?.revisions.isEmpty == false || message.editedTime != nil {
+            let revisions = monogramData.editHistory?.revisions ?? []
+            actions.append(.action(ContextMenuActionItem(text: "Изменения (\(revisions.count + 1))", icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/History"), color: theme.actionSheet.primaryTextColor)
             }, action: { c, _ in
                 let currentTimestamp = message.editedTime.flatMap { $0 != 0 ? $0 : nil } ?? message.timestamp
                 c?.dismiss(completion: {
-                    controllerInteraction.presentController(monogramEditHistoryController(
+                    controllerInteraction.navigationController()?.pushViewController(monogramEditHistoryController(
                         context: context,
-                        revisions: editHistory.revisions,
+                        revisions: revisions,
                         currentText: message.text,
                         currentTimestamp: currentTimestamp
-                    ), nil)
+                    ))
                 })
             })))
         }
@@ -2120,21 +2125,6 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                 return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Read"), color: theme.actionSheet.primaryTextColor)
             }, action: { _, f in
                 let _ = context.engine.messages.applyMaxReadIndexInteractively(index: message.index).start()
-                f(.default)
-            })))
-            actions.append(.action(ContextMenuActionItem(text: monogramData.ghostExcludesPeer ? "Включить Ghost Mode в этом чате" : "Исключить чат из Ghost Mode", icon: { theme in
-                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Restrict"), color: theme.actionSheet.primaryTextColor)
-            }, action: { _, f in
-                let peerValue = message.id.peerId.toInt64()
-                let _ = updateMonogramAccountSettingsInteractively(postbox: context.account.postbox, { settings in
-                    var settings = settings
-                    if let index = settings.ghostModeExcludedPeerIds.firstIndex(of: peerValue) {
-                        settings.ghostModeExcludedPeerIds.remove(at: index)
-                    } else {
-                        settings.ghostModeExcludedPeerIds.append(peerValue)
-                    }
-                    return settings
-                }).start()
                 f(.default)
             })))
         }

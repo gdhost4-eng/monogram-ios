@@ -63,6 +63,36 @@ class MonogramFeaturesSourceTests(unittest.TestCase):
         self.assertIn("message.flags.contains(.Incoming)", history)
         self.assertIn("rawTransition.stationaryItemRange = (0, Int.max)", history)
 
+    def test_ghost_exclusion_is_in_profile_not_message_menu(self):
+        menu = self.source("submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift")
+        profile = self.source("submodules/TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoProfileItems.swift")
+        self.assertNotIn("Исключить чат из Ghost Mode", menu)
+        self.assertIn("Исключить чат из Ghost Mode", profile)
+        self.assertIn("settings.ghostModeExcludedPeerIds.removeAll", profile)
+
+    def test_preservation_reads_transaction_settings_not_async_ui_cache(self):
+        for filename in ("MonogramEditHistory.swift", "MonogramDeletedMessageTransform.swift"):
+            source = self.source("submodules/MonogramCore/Sources/" + filename)
+            self.assertIn("monogramAccountSettings(transaction: transaction)", source)
+            self.assertNotIn("MonogramRuntimePolicy.isEnabled", source)
+
+    def test_bookmark_uuid_uses_postbox_supported_string_coding(self):
+        source = self.source("submodules/MonogramCore/Sources/MonogramBookmark.swift")
+        self.assertIn("container.encode(self.id.uuidString, forKey: .id)", source)
+        self.assertIn("container.decode(String.self, forKey: .id)", source)
+
+    def test_temporary_account_context_does_not_uninstall_preservation(self):
+        source = self.source("submodules/TelegramUI/Sources/AccountContext.swift")
+        self.assertRegex(source, r"if !temp \{\s+(?://[^\n]*\n\s*)*self.monogramSettingsDisposable =")
+        self.assertRegex(source, r"if let monogramSettingsDisposable = self.monogramSettingsDisposable \{\s+monogramSettingsDisposable.dispose\(\)\s+self.account.postbox.setMessageDeletionTransform\(nil\)")
+
+    def test_preserved_message_ids_are_positive_and_history_uses_navigation(self):
+        source = self.source("submodules/MonogramCore/Sources/MonogramDeletedMessageTransform.swift")
+        self.assertIn("let localIdValue = max(1, message.id.id)", source)
+        menu = self.source("submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift")
+        self.assertIn("navigationController()?.pushViewController(monogramEditHistoryController", menu)
+        self.assertNotIn("settings.isEnabled(.preserveEditHistory) ? editHistory : nil", menu)
+
 
 if __name__ == "__main__":
     unittest.main()
