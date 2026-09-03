@@ -42,20 +42,22 @@
 | Возможность | Статус | Следующая проверяемая точка |
 | --- | --- | --- |
 | Изолированный Extension Layer | 🟡 partial | `MonogramCore` и `MonogramUI` добавлены; build verification ожидается |
-| Advanced Settings | 🟡 partial | Экран подключён, global/per-account persistence работает по коду; per-chat scope и build test ожидаются |
-| Feature flags / experimental flags | 🟡 partial | Typed registry, schema v1, safe defaults/migration и tests добавлены, но не запущены |
+| Вкладка Monogram | 🟡 partial | Пустые feature-флаги удалены; экран показывает только подключённые функции, build test ожидается |
+| Ghost Mode | 🟡 partial | Read receipts, typing/sticker/recording activity, таймер, ручное прочтение и исключения чатов подключены; build/runtime test ожидается |
+| Сохранение удалённых сообщений | 🟡 partial | Перед удалением создаётся локальный пузырь в отдельном namespace; сохраняются только уже загруженные файлы/изображения; sensitive content исключён |
+| История редактирования | 🟡 partial | До 50 прошлых текстовых версий на сообщение, просмотр и очистка из context menu; build/runtime test ожидается |
+| Feature flags / experimental flags | 🟡 partial | Typed registry, schema v2, safe defaults/migration и source tests добавлены; iOS build ожидается |
 | Нет фиксированного лимита аккаунтов | 🟡 partial | Пять UI gate и обе константы 3/4 удалены, policy = no maximum; нужны build и тесты 4+/10+ accounts |
 | Reorder/account switcher improvements | ➕ custom — planned | Сохранить `AccountSortOrderAttribute`, добавить UX audit |
 | Local bookmarks | 🟡 partial | Repository, privacy gates, context action, list, reactive note/tag search, editor, open-message и confirmed delete готовы; iOS build/tests ожидаются |
-| Local notes | 🟡 partial | Peer annotation repository и message bookmark notes готовы; editor UI и iOS tests ожидаются |
-| Custom tags | 🟡 partial | Общая нормализация и локальная фильтрация bookmarks/peers готовы; chat/search UI ожидается |
-| Appearance enhancements | ➕ custom — planned | Расширить presentation preferences без поломки themes |
-| Search enhancements | ➕ custom — planned | Объединить локальные результаты с server search |
-| Translation controls | ➕ custom — planned | On-device/system-first, явное согласие для внешних сервисов |
-| Power-user identifiers | ➕ custom — planned | По умолчанию выключено; безопасная выдача ID/debug info |
-| Media enhancements | ➕ custom — planned | Download metadata, batch actions, autoplay/cache controls |
-| Extended offline/storage | ➕ custom — planned | Cache policies, stats, low-storage и reconnect tests |
-| Security redaction | ➕ custom — planned | Запрет sensitive logs и regression tests |
+| Local notes | 🟡 partial | Редактор подключён к профилю, добавлены список и локальный поиск; iOS tests ожидаются |
+| Custom tags | 🟡 partial | Нормализация, редактор и локальный поиск bookmarks/peers подключены; iOS tests ожидаются |
+| Локальные закрепления | 🟡 partial | Context action использует локальные bookmarks с системным тегом; build/runtime test ожидается |
+| Power-user identifiers | 🟡 partial | Копирование peer/message/namespace ID добавлено в context menu и выключено по умолчанию |
+| Подтверждение записи | 🟡 partial | Голосовые и видеосообщения переводятся в preview до отправки; build/runtime test ожидается |
+| Автоклавиатура | 🟡 partial | Автоматически запланированный focus подавляется, ручной focus сохранён; build/runtime test ожидается |
+| Проверка активного аккаунта | 🟡 partial | Перед отправкой показывается имя текущего аккаунта и требуется подтверждение; build/runtime test ожидается |
+| Блокировка автопрокрутки | 🟡 partial | При входящей вставке viewport фиксируется через stationary range; ручная навигация и исходящие сообщения не затрагиваются |
 
 ## Правило обновления
 

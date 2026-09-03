@@ -16,6 +16,8 @@ import WebUI
 import AvatarNode
 import PeerNameColorItem
 import BoostLevelIconComponent
+import MonogramCore
+import MonogramUI
 
 private let enabledPublicBioEntities: EnabledEntityTypes = [.allUrl, .mention, .hashtag]
 private let enabledPrivateBioEntities: EnabledEntityTypes = [.internalUrl, .mention, .hashtag]
@@ -848,6 +850,24 @@ func infoItems(
         }
     }
     
+    if let peerId = data.peer?.id,
+       MonogramRuntimePolicy.isEnabled(.localNotes, accountPeerId: context.account.peerId),
+       MonogramLocalDataPolicy.allowsPeerAnnotation(peerId: peerId) {
+        items[.peerInfoTrailing]!.append(PeerInfoScreenDisclosureItem(id: 0x4d4f4e, label: .none, text: "Локальная заметка и теги", icon: PresentationResourcesSettings.savedMessages, action: {
+            let _ = (monogramPeerAnnotation(postbox: context.account.postbox, peerId: peerId)
+            |> take(1)
+            |> deliverOnMainQueue).startStandalone(next: { annotation in
+                interaction.getController()?.push(monogramPeerAnnotationEditorController(
+                    context: context,
+                    peerId: peerId,
+                    annotation: annotation,
+                    allowsNote: true,
+                    allowsTags: MonogramRuntimePolicy.isEnabled(.customTags, accountPeerId: context.account.peerId)
+                ))
+            })
+        }))
+    }
+
     if let peer = data.peer, let members = data.members, case let .shortList(_, memberList) = members {
         var canAddMembers = false
         if case let .legacyGroup(group) = data.peer {

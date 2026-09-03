@@ -239,7 +239,7 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
     items[.advanced]!.append(PeerInfoScreenDisclosureItem(id: 3, text: presentationData.strings.Settings_Appearance, icon: PresentationResourcesSettings.appearance, action: {
         interaction.openSettings(.appearance)
     }))
-    items[.advanced]!.append(PeerInfoScreenDisclosureItem(id: 7, text: presentationData.strings.Monogram_Settings_Advanced, icon: PresentationResourcesSettings.settings, action: {
+    items[.advanced]!.append(PeerInfoScreenDisclosureItem(id: 7, text: "Monogram", icon: PresentationResourcesSettings.settings, action: {
         interaction.openSettings(.advancedSettings)
     }))
     

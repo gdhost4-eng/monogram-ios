@@ -38,6 +38,7 @@ import TextFormat
 import ChatNewThreadInfoItem
 import PhoneNumberFormat
 import Postbox
+import MonogramCore
 
 struct ChatTopVisibleMessageRange: Equatable {
     var lowerBound: MessageIndex
@@ -2472,7 +2473,25 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
                     }
                 }
                 
-                let rawTransition = preparedChatHistoryViewTransition(from: previous, to: processedView, reason: reason, reverse: reverse, chatLocation: chatLocation, source: source, controllerInteraction: controllerInteraction, scrollPosition: updatedScrollPosition, scrollAnimationCurve: scrollAnimationCurve, initialData: initialData?.initialData, keyboardButtonsMessage: keyboardButtonsMessage, cachedData: initialData?.cachedData, cachedDataMessages: initialData?.cachedDataMessages, readStateData: initialData?.readStateData, flashIndicators: flashIndicators, updatedMessageSelection: previousSelectedMessages != selectedMessages, messageTransitionNode: messageTransitionNode(), allUpdated: !isSavedMusic || forceUpdateAll)
+                var rawTransition = preparedChatHistoryViewTransition(from: previous, to: processedView, reason: reason, reverse: reverse, chatLocation: chatLocation, source: source, controllerInteraction: controllerInteraction, scrollPosition: updatedScrollPosition, scrollAnimationCurve: scrollAnimationCurve, initialData: initialData?.initialData, keyboardButtonsMessage: keyboardButtonsMessage, cachedData: initialData?.cachedData, cachedDataMessages: initialData?.cachedDataMessages, readStateData: initialData?.readStateData, flashIndicators: flashIndicators, updatedMessageSelection: previousSelectedMessages != selectedMessages, messageTransitionNode: messageTransitionNode(), allUpdated: !isSavedMusic || forceUpdateAll)
+                if case .InteractiveChanges = reason, case let .peer(peerId) = chatLocation, MonogramRuntimePolicy.isEnabled(.suppressIncomingAutoScroll, accountPeerId: context.account.peerId) {
+                    let hasIncomingInsert = rawTransition.insertEntries.contains(where: { insertEntry in
+                        switch insertEntry.entry {
+                        case let .MessageEntry(message, _, _, _, _, _):
+                            return message.id.peerId == peerId && message.id.namespace == Namespaces.Message.Cloud && message.flags.contains(.Incoming)
+                        case let .MessageGroupEntry(_, messages, _):
+                            return messages.contains(where: { item in
+                                return item.0.id.peerId == peerId && item.0.id.namespace == Namespaces.Message.Cloud && item.0.flags.contains(.Incoming)
+                            })
+                        default:
+                            return false
+                        }
+                    })
+                    if hasIncomingInsert {
+                        rawTransition.scrollToItem = nil
+                        rawTransition.stationaryItemRange = (0, Int.max)
+                    }
+                }
                 var mappedTransition = mappedChatHistoryViewListTransition(context: context, chatLocation: chatLocation, associatedData: associatedData, controllerInteraction: controllerInteraction, mode: mode, lastHeaderId: lastHeaderId, isSavedMusic: isSavedMusic, canReorder: processedView.filteredEntries.count > 1 && canReorder, animateFromPreviousFilter: resetScrolling, transition: rawTransition, systemStyle: systemStyle)
                 
                 if disableAnimations {

@@ -24,6 +24,7 @@ import DCTAnimationCacheImpl
 import DCTMultiAnimationRendererImpl
 import AppBundle
 import DirectMediaImageCache
+import MonogramCore
 
 private final class DeviceSpecificContactImportContext {
     let disposable = MetaDisposable()
@@ -168,6 +169,7 @@ public final class AccountContextImpl: AccountContext {
     private var managedAppSpecificContactsDisposable: Disposable?
     
     private var experimentalUISettingsDisposable: Disposable?
+    private var monogramSettingsDisposable: Disposable?
     
     public let cachedGroupCallContexts: AccountGroupCallContextCache
     
@@ -315,6 +317,26 @@ public final class AccountContextImpl: AccountContext {
         
         self.account.stateManager.starsContext = self.starsContext
         self.account.stateManager.tonContext = self.starsContext
+
+        self.monogramSettingsDisposable = (monogramAccountSettings(postbox: account.postbox)
+        |> deliverOnMainQueue).startStrict(next: { [weak account] settings in
+            guard let account else {
+                return
+            }
+            MonogramRuntimePolicy.update(accountPeerId: account.peerId, settings: settings)
+        })
+        account.postbox.setMessageDeletionTransform { [weak account] messages, transaction in
+            guard let account else {
+                return [:]
+            }
+            return MonogramDeletedMessageTransform.transform(messages: messages, transaction: transaction, accountPeerId: account.peerId, mediaBox: account.postbox.mediaBox)
+        }
+        account.postbox.setMessageUpdateObserver { [weak account] updates, transaction in
+            guard let account else {
+                return
+            }
+            captureMonogramMessageEdits(transaction: transaction, updates: updates, accountPeerId: account.peerId)
+        }
                 
         self.cachedGroupCallContexts = AccountGroupCallContextCacheImpl()
         
@@ -511,6 +533,10 @@ public final class AccountContextImpl: AccountContext {
         self.appConfigurationDisposable?.dispose()
         self.countriesConfigurationDisposable?.dispose()
         self.experimentalUISettingsDisposable?.dispose()
+        self.monogramSettingsDisposable?.dispose()
+        self.account.postbox.setMessageDeletionTransform(nil)
+        self.account.postbox.setMessageUpdateObserver(nil)
+        MonogramRuntimePolicy.remove(accountPeerId: self.account.peerId)
         self.animatedEmojiStickersDisposable?.dispose()
         self.userLimitsConfigurationDisposable?.dispose()
         self.peerNameColorsConfigurationDisposable?.dispose()
@@ -605,6 +631,9 @@ public final class AccountContextImpl: AccountContext {
     }
     
     public func applyMaxReadIndex(for location: ChatLocation, contextHolder: Atomic<ChatLocationContextHolder?>, messageIndex: MessageIndex) {
+        if MonogramRuntimePolicy.suppressesReadReceipts(accountPeerId: self.account.peerId, peerId: location.peerId) {
+            return
+        }
         switch location {
         case .peer:
             let _ = self.engine.messages.applyMaxReadIndexInteractively(index: messageIndex).start()

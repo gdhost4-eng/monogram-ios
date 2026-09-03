@@ -144,7 +144,7 @@ public final class Transaction {
     
     public func deleteMessages(_ messageIds: [MessageId], forEachMedia: ((Media) -> Void)?) {
         assert(!self.disposed)
-        self.postbox?.deleteMessages(messageIds, forEachMedia: forEachMedia)
+        self.postbox?.deleteMessages(transaction: self, messageIds, forEachMedia: forEachMedia)
     }
     
     public func deleteMessagesInRange(peerId: PeerId, namespace: MessageId.Namespace, minId: MessageId.Id, maxId: MessageId.Id, forEachMedia: ((Media) -> Void)?) {
@@ -197,7 +197,7 @@ public final class Transaction {
         assert(!self.disposed)
         if let postbox = self.postbox {
             let messageIds = postbox.messageIdsForGlobalIds(ids)
-            postbox.deleteMessages(messageIds, forEachMedia: forEachMedia)
+            postbox.deleteMessages(transaction: self, messageIds, forEachMedia: forEachMedia)
         }
     }
     
@@ -1863,6 +1863,8 @@ final class PostboxImpl {
     
     var installedMessageActionsByPeerId: [PeerId: Bag<([StoreMessage], Transaction) -> Void>] = [:]
     var installedStoreOrUpdateMessageActionsByPeerId: [PeerId: Bag<StoreOrUpdateMessageAction>] = [:]
+    var messageDeletionTransform: (([Message], Transaction) -> [MessageId: StoreMessage])?
+    var messageUpdateObserver: (([(Message, StoreMessage)], Transaction) -> Void)?
     
     init(queue: Queue, basePath: String, seedConfiguration: SeedConfiguration, valueBox: SqliteValueBox, timestampForAbsoluteTimeBasedOperations: Int32, isTemporary: Bool, tempDir: TempBoxDirectory?, useCaches: Bool, isInTransaction: Atomic<Bool>) {
         assert(queue.isCurrent())
@@ -2170,6 +2172,17 @@ final class PostboxImpl {
     }
     
     fileprivate func addMessages(transaction: Transaction, messages: [StoreMessage], location: AddMessagesLocation) -> [Int64: MessageId] {
+        if let messageUpdateObserver = self.messageUpdateObserver {
+            var updatedMessages: [(Message, StoreMessage)] = []
+            for message in messages {
+                if case let .Id(id) = message.id, let current = self.getMessage(id) {
+                    updatedMessages.append((current, message))
+                }
+            }
+            if !updatedMessages.isEmpty {
+                messageUpdateObserver(updatedMessages, transaction)
+            }
+        }
         var addedMessagesByPeerId: [PeerId: [StoreMessage]] = [:]
         let addResult = self.messageHistoryTable.addMessages(messages: messages, operationsByPeerId: &self.currentOperationsByPeerId, updatedMedia: &self.currentUpdatedMedia, unsentMessageOperations: &currentUnsentOperations, updatedPeerReadStateOperations: &self.currentUpdatedSynchronizeReadStateOperations, globalTagsOperations: &self.currentGlobalTagsOperations, pendingActionsOperations: &self.currentPendingMessageActionsOperations, updatedMessageActionsSummaries: &self.currentUpdatedMessageActionsSummaries, updatedMessageTagSummaries: &self.currentUpdatedMessageTagSummaries, invalidateMessageTagSummaries: &self.currentInvalidateMessageTagSummaries, localTagsOperations: &self.currentLocalTagsOperations, timestampBasedMessageAttributesOperations: &self.currentTimestampBasedMessageAttributesOperations, processMessages: { messagesByPeerId in
             addedMessagesByPeerId = messagesByPeerId
@@ -2283,8 +2296,32 @@ final class PostboxImpl {
         self.chatListTable.addHole(groupId: groupId, hole: hole, operations: &self.currentChatListOperations)
     }
     
-    fileprivate func deleteMessages(_ messageIds: [MessageId], forEachMedia: ((Media) -> Void)?) {
-        self.messageHistoryTable.removeMessages(messageIds, operationsByPeerId: &self.currentOperationsByPeerId, updatedMedia: &self.currentUpdatedMedia, unsentMessageOperations: &currentUnsentOperations, updatedPeerReadStateOperations: &self.currentUpdatedSynchronizeReadStateOperations, globalTagsOperations: &self.currentGlobalTagsOperations, pendingActionsOperations: &self.currentPendingMessageActionsOperations, updatedMessageActionsSummaries: &self.currentUpdatedMessageActionsSummaries, updatedMessageTagSummaries: &self.currentUpdatedMessageTagSummaries, invalidateMessageTagSummaries: &self.currentInvalidateMessageTagSummaries, localTagsOperations: &self.currentLocalTagsOperations, timestampBasedMessageAttributesOperations: &self.currentTimestampBasedMessageAttributesOperations, forEachMedia: forEachMedia)
+    fileprivate func deleteMessages(transaction: Transaction, _ messageIds: [MessageId], forEachMedia: ((Media) -> Void)?) {
+        var idsToDelete = messageIds
+        if let messageDeletionTransform = self.messageDeletionTransform {
+            let messages = messageIds.compactMap(self.getMessage)
+            let transformedMessages = messageDeletionTransform(messages, transaction)
+            if !transformedMessages.isEmpty {
+                var messagesToAdd: [StoreMessage] = []
+                for (id, transformedMessage) in transformedMessages {
+                    if case let .Id(transformedId) = transformedMessage.id, transformedId != id {
+                        messagesToAdd.append(transformedMessage)
+                    } else {
+                        self.messageHistoryTable.updateMessage(id, message: transformedMessage, operationsByPeerId: &self.currentOperationsByPeerId, updatedMedia: &self.currentUpdatedMedia, unsentMessageOperations: &self.currentUnsentOperations, updatedPeerReadStateOperations: &self.currentUpdatedSynchronizeReadStateOperations, globalTagsOperations: &self.currentGlobalTagsOperations, pendingActionsOperations: &self.currentPendingMessageActionsOperations, updatedMessageActionsSummaries: &self.currentUpdatedMessageActionsSummaries, updatedMessageTagSummaries: &self.currentUpdatedMessageTagSummaries, invalidateMessageTagSummaries: &self.currentInvalidateMessageTagSummaries, localTagsOperations: &self.currentLocalTagsOperations, timestampBasedMessageAttributesOperations: &self.currentTimestampBasedMessageAttributesOperations)
+                    }
+                }
+                if !messagesToAdd.isEmpty {
+                    let _ = self.addMessages(transaction: transaction, messages: messagesToAdd, location: .Random)
+                }
+                idsToDelete.removeAll(where: { id in
+                    guard let transformedMessage = transformedMessages[id], case let .Id(transformedId) = transformedMessage.id else {
+                        return false
+                    }
+                    return transformedId == id
+                })
+            }
+        }
+        self.messageHistoryTable.removeMessages(idsToDelete, operationsByPeerId: &self.currentOperationsByPeerId, updatedMedia: &self.currentUpdatedMedia, unsentMessageOperations: &currentUnsentOperations, updatedPeerReadStateOperations: &self.currentUpdatedSynchronizeReadStateOperations, globalTagsOperations: &self.currentGlobalTagsOperations, pendingActionsOperations: &self.currentPendingMessageActionsOperations, updatedMessageActionsSummaries: &self.currentUpdatedMessageActionsSummaries, updatedMessageTagSummaries: &self.currentUpdatedMessageTagSummaries, invalidateMessageTagSummaries: &self.currentInvalidateMessageTagSummaries, localTagsOperations: &self.currentLocalTagsOperations, timestampBasedMessageAttributesOperations: &self.currentTimestampBasedMessageAttributesOperations, forEachMedia: forEachMedia)
     }
     
     fileprivate func deleteMessagesInRange(peerId: PeerId, namespace: MessageId.Namespace, minId: MessageId.Id, maxId: MessageId.Id, forEachMedia: ((Media) -> Void)?) {
@@ -3020,6 +3057,7 @@ final class PostboxImpl {
         if let index = self.messageHistoryIndexTable.getIndex(id), let intermediateMessage = self.messageHistoryTable.getMessage(index) {
             let message = self.renderIntermediateMessage(intermediateMessage)
             if case let .update(updatedMessage) = update(message) {
+                self.messageUpdateObserver?([(message, updatedMessage)], transaction)
                 self.messageHistoryTable.updateMessage(id, message: updatedMessage, operationsByPeerId: &self.currentOperationsByPeerId, updatedMedia: &self.currentUpdatedMedia, unsentMessageOperations: &self.currentUnsentOperations, updatedPeerReadStateOperations: &self.currentUpdatedSynchronizeReadStateOperations, globalTagsOperations: &self.currentGlobalTagsOperations, pendingActionsOperations: &self.currentPendingMessageActionsOperations, updatedMessageActionsSummaries: &self.currentUpdatedMessageActionsSummaries, updatedMessageTagSummaries: &self.currentUpdatedMessageTagSummaries, invalidateMessageTagSummaries: &self.currentInvalidateMessageTagSummaries, localTagsOperations: &self.currentLocalTagsOperations, timestampBasedMessageAttributesOperations: &self.currentTimestampBasedMessageAttributesOperations)
                 
                 if let bag = self.installedStoreOrUpdateMessageActionsByPeerId[id.peerId] {
@@ -4683,6 +4721,22 @@ public class Postbox {
                     afterTransactionIfRunning()
                 })
             })
+        }
+    }
+
+    /// Installs an account-local transform invoked immediately before messages
+    /// are physically removed. A replacement with the same id prevents removal;
+    /// a replacement in another namespace is inserted before the original is
+    /// removed.
+    public func setMessageDeletionTransform(_ transform: (([Message], Transaction) -> [MessageId: StoreMessage])?) {
+        self.impl.with { impl in
+            impl.messageDeletionTransform = transform
+        }
+    }
+
+    public func setMessageUpdateObserver(_ observer: (([(Message, StoreMessage)], Transaction) -> Void)?) {
+        self.impl.with { impl in
+            impl.messageUpdateObserver = observer
         }
     }
 

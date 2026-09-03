@@ -1,4 +1,5 @@
 import Foundation
+import MonogramCore
 import UIKit
 import Postbox
 import SwiftSignalKit
@@ -6554,6 +6555,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             self.inputActivityDisposable = (self.typingActivityPromise.get()
             |> deliverOnMainQueue).startStrict(next: { [weak self] value in
                 if let strongSelf = self, strongSelf.presentationInterfaceState.interfaceState.editMessage == nil && strongSelf.presentationInterfaceState.subject != .scheduledMessages && strongSelf.presentationInterfaceState.currentSendAsPeerId == nil {
+                    if MonogramRuntimePolicy.suppressesInputActivity(accountPeerId: strongSelf.context.account.peerId, peerId: strongSelf.chatLocation.peerId) {
+                        strongSelf.context.account.updateLocalInputActivity(peerId: activitySpace, activity: .typingText, isPresent: false)
+                        return
+                    }
                     strongSelf.context.account.updateLocalInputActivity(peerId: activitySpace, activity: .typingText, isPresent: value)
                 }
             })
@@ -6568,6 +6573,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             }
             |> deliverOnMainQueue).startStrict(next: { [weak self] value in
                 if let strongSelf = self, strongSelf.presentationInterfaceState.interfaceState.editMessage == nil && strongSelf.presentationInterfaceState.subject != .scheduledMessages && strongSelf.presentationInterfaceState.currentSendAsPeerId == nil {
+                    if MonogramRuntimePolicy.suppressesInputActivity(accountPeerId: strongSelf.context.account.peerId, peerId: strongSelf.chatLocation.peerId) {
+                        strongSelf.context.account.updateLocalInputActivity(peerId: activitySpace, activity: .choosingSticker, isPresent: false)
+                        return
+                    }
                     if value {
                         strongSelf.context.account.updateLocalInputActivity(peerId: activitySpace, activity: .typingText, isPresent: false)
                     }
@@ -6579,6 +6588,10 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             |> deliverOnMainQueue).startStrict(next: { [weak self] value in
                 if let strongSelf = self, strongSelf.presentationInterfaceState.interfaceState.editMessage == nil && strongSelf.presentationInterfaceState.subject != .scheduledMessages && strongSelf.presentationInterfaceState.currentSendAsPeerId == nil {
                     strongSelf.acquiredRecordingActivityDisposable?.dispose()
+                    if MonogramRuntimePolicy.suppressesInputActivity(accountPeerId: strongSelf.context.account.peerId, peerId: strongSelf.chatLocation.peerId) {
+                        strongSelf.acquiredRecordingActivityDisposable = nil
+                        return
+                    }
                     switch value {
                         case .voice:
                             strongSelf.acquiredRecordingActivityDisposable = strongSelf.context.account.acquireLocalInputActivity(peerId: activitySpace, activity: .recordingVoice)
@@ -8974,13 +8987,35 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         return .single(false)
     }
     
-    func sendMessages(_ messages: [EnqueueMessage], media: Bool = false, postpone: Bool = false, commit: Bool = false) {
+    func sendMessages(_ messages: [EnqueueMessage], media: Bool = false, postpone: Bool = false, commit: Bool = false, monogramAccountConfirmed: Bool = false) {
         if case let .customChatContents(customChatContents) = self.subject {
             customChatContents.enqueueMessages(messages: messages)
             return
         }
         
         guard let peerId = self.chatLocation.peerId else {
+            return
+        }
+
+        if !monogramAccountConfirmed && MonogramRuntimePolicy.isEnabled(.confirmAccountBeforeSending, accountPeerId: self.context.account.peerId) {
+            let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: self.context.account.peerId))
+            |> deliverOnMainQueue).startStandalone(next: { [weak self] accountPeer in
+                guard let self else {
+                    return
+                }
+                let accountTitle = accountPeer?.displayTitle(strings: self.presentationData.strings, displayOrder: self.presentationData.nameDisplayOrder) ?? "ID \(self.context.account.peerId.toInt64())"
+                self.present(textAlertController(
+                    context: self.context,
+                    title: "Отправить с аккаунта «\(accountTitle)»?",
+                    text: "Проверьте активный аккаунт перед отправкой сообщения.",
+                    actions: [
+                        TextAlertAction(type: .defaultAction, title: "Отправить", action: { [weak self] in
+                            self?.sendMessages(messages, media: media, postpone: postpone, commit: commit, monogramAccountConfirmed: true)
+                        }),
+                        TextAlertAction(type: .genericAction, title: self.presentationData.strings.Common_Cancel, action: {})
+                    ]
+                ), in: .window(.root))
+            })
             return
         }
         
@@ -9036,7 +9071,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             } else {
                 self.presentScheduleTimePicker(style: media ? .media : .default, dismissByTapOutside: false, completion: { [weak self] result in
                     if let strongSelf = self {
-                        strongSelf.sendMessages(strongSelf.transformEnqueueMessages(messages, silentPosting: result.silentPosting, scheduleTime: result.time, repeatPeriod: result.repeatPeriod, postpone: postpone), commit: true)
+                        strongSelf.sendMessages(strongSelf.transformEnqueueMessages(messages, silentPosting: result.silentPosting, scheduleTime: result.time, repeatPeriod: result.repeatPeriod, postpone: postpone), commit: true, monogramAccountConfirmed: true)
                     }
                 })
             }
@@ -10448,7 +10483,9 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 self.chatDisplayNode.openStickers(beginWithEmoji: true)
             }
         } else {
-            self.scheduledActivateInput = type
+            if !MonogramRuntimePolicy.isEnabled(.suppressAutomaticKeyboard, accountPeerId: self.context.account.peerId) {
+                self.scheduledActivateInput = type
+            }
         }
     }
     

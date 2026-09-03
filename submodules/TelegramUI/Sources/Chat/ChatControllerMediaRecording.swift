@@ -33,6 +33,7 @@ import InstantPageUI
 import LocationUI
 import BotPaymentsUI
 import DeleteChatPeerActionSheetItem
+import MonogramCore
 import HashtagSearchUI
 import LegacyMediaPickerUI
 import Emoji
@@ -247,6 +248,9 @@ extension ChatControllerImpl {
     
     func dismissMediaRecorder(_ action: ChatFinishMediaRecordingAction) {
         var updatedAction = action
+        if MonogramRuntimePolicy.isEnabled(.confirmVoiceMessages, accountPeerId: self.context.account.peerId), case .send = updatedAction {
+            updatedAction = .preview
+        }
         var isScheduledMessages = false
         if case .scheduledMessages = self.presentationInterfaceState.subject {
             isScheduledMessages = true

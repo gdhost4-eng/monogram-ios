@@ -9,6 +9,7 @@ import AccountContext
 import UniversalMediaPlayer
 import TelegramAudio
 import TelegramPresentationData
+import MonogramCore
 
 private struct AccountTasks {
     let stateSynchronization: Bool
@@ -19,6 +20,7 @@ private struct AccountTasks {
     let activeCalls: Bool
     let watchTasks: Bool
     let userInterfaceInUse: Bool
+    let suppressOnlinePresence: Bool
     
     var isEmpty: Bool {
         if self.stateSynchronization {
@@ -256,10 +258,26 @@ public final class SharedWakeupManager {
                 |> distinctUntilChanged
                 
                 let userInterfaceInUse = accountUserInterfaceInUse(account.id)
+                let suppressOnlinePresence = monogramAccountSettings(postbox: account.postbox)
+                |> mapToSignal { settings -> Signal<Bool, NoError> in
+                    guard settings.isEnabled(.ghostMode) else {
+                        return .single(false)
+                    }
+                    if let expiresAt = settings.ghostModeExpiresAt {
+                        let remaining = expiresAt - Int64(Date().timeIntervalSince1970)
+                        guard remaining > 0 else {
+                            return .single(false)
+                        }
+                        return .single(true)
+                        |> then(.single(false) |> delay(Double(remaining), queue: .mainQueue()))
+                    }
+                    return .single(true)
+                }
+                |> distinctUntilChanged
                 
-                return combineLatest(queue: .mainQueue(), account.importantTasksRunning, notificationManager?.isPollingState(accountId: account.id) ?? .single(false), hasActiveAudio, keepUpdatesForCalls, hasActiveLiveLocationPolling, hasWatchTasks, userInterfaceInUse)
-                |> map { importantTasksRunning, isPollingState, hasActiveAudio, keepUpdatesForCalls, hasActiveLiveLocationPolling, hasWatchTasks, userInterfaceInUse -> (Account, Bool, AccountTasks) in
-                    return (account, primary?.id == account.id, AccountTasks(stateSynchronization: isPollingState, importantTasks: importantTasksRunning, backgroundLocation: hasActiveLiveLocationPolling, backgroundDownloads: false, backgroundAudio: hasActiveAudio, activeCalls: keepUpdatesForCalls, watchTasks: hasWatchTasks, userInterfaceInUse: userInterfaceInUse))
+                return combineLatest(queue: .mainQueue(), account.importantTasksRunning, notificationManager?.isPollingState(accountId: account.id) ?? .single(false), hasActiveAudio, keepUpdatesForCalls, hasActiveLiveLocationPolling, hasWatchTasks, userInterfaceInUse, suppressOnlinePresence)
+                |> map { importantTasksRunning, isPollingState, hasActiveAudio, keepUpdatesForCalls, hasActiveLiveLocationPolling, hasWatchTasks, userInterfaceInUse, suppressOnlinePresence -> (Account, Bool, AccountTasks) in
+                    return (account, primary?.id == account.id, AccountTasks(stateSynchronization: isPollingState, importantTasks: importantTasksRunning, backgroundLocation: hasActiveLiveLocationPolling, backgroundDownloads: false, backgroundAudio: hasActiveAudio, activeCalls: keepUpdatesForCalls, watchTasks: hasWatchTasks, userInterfaceInUse: userInterfaceInUse, suppressOnlinePresence: suppressOnlinePresence))
                 }
             }
             return combineLatest(signals)
@@ -1149,7 +1167,7 @@ public final class SharedWakeupManager {
                     account.shouldBeServiceTaskMaster.set(.single(.never))
                 }
                 account.shouldExplicitelyKeepWorkerConnections.set(.single(tasks.backgroundAudio || tasks.backgroundLocation || tasks.importantTasks.pendingStoryCount != 0 || tasks.importantTasks.pendingMessageCount != 0))
-                account.shouldKeepOnlinePresence.set(.single(primary && self.inForeground))
+                account.shouldKeepOnlinePresence.set(.single(primary && self.inForeground && !tasks.suppressOnlinePresence))
                 account.shouldKeepBackgroundDownloadConnections.set(.single(tasks.backgroundDownloads))
             }
             

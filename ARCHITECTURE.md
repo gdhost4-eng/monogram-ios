@@ -45,7 +45,7 @@ Telegram-iOS остаётся фундаментом. Monogram добавляе�
 
 Низкоуровневый модуль без UI:
 
-- schema/version migrations (schema v1);
+- schema/version migrations (schema v2);
 - global/per-account settings models и отдельные persistence keys;
 - feature and experimental flags с typed registry;
 - local bookmarks/notes/tags repositories;
@@ -72,6 +72,10 @@ UI-интеграция:
 - Global settings: account-manager shared data, custom key `0x4d4f4e01`.
 - Per-account settings: account-specific preferences/Postbox с отдельной таблицей и тем же namespaced key value.
 - Per-chat settings: account Postbox keyed by `PeerId`.
+- Ghost Mode хранит срок действия и список исключённых `PeerId` в per-account settings; горячие UI paths используют синхронное зеркало reactive settings.
+- Настройки поведения чата (автоклавиатура, подтверждение отправителя и блокировка входящей автопрокрутки) также читаются из синхронного account-scoped зеркала, чтобы не добавлять подписки в горячие UI paths.
+- Сохранённые после удаления сообщения переносятся из cloud namespace в `Namespaces.Message.MonogramLocal`; исходный cloud message удаляется штатно, поэтому server reconciliation не перезаписывает локальную копию.
+- История редактирования хранится в `OrderedItemList` collection `0x4d4f4203`, индекс сохранённых удалённых сообщений — `0x4d4f4204`.
 - Message bookmarks: отдельная Postbox `OrderedItemList` collection `0x4d4f4201`; запись содержит только `MessageId`, локальную заметку, нормализованные теги и `Int64` timestamps, без копии текста/медиа сообщения.
 - Peer notes/tags: отдельная Postbox `OrderedItemList` collection `0x4d4f4202`, keyed by `PeerId`, с наблюдаемым списком, upsert/remove и локальным поиском.
 - Обе коллекции не имеют искусственного tail limit и физически изолированы Postbox текущего account.

@@ -15,20 +15,20 @@ final class MonogramCoreTests: XCTestCase {
         let settings = MonogramSettings()
         XCTAssertTrue(settings.isEnabled(.advancedSettings))
         XCTAssertFalse(settings.isEnabled(.localBookmarks))
-        XCTAssertFalse(settings.isEnabled(.developerTools))
+        XCTAssertFalse(settings.isEnabled(.ghostMode))
     }
 
     func testRegularAndExperimentalOverridesRoundTrip() throws {
         var settings = MonogramSettings()
         settings.setEnabled(true, for: .localBookmarks)
-        settings.setEnabled(true, for: .developerTools)
+        settings.setEnabled(true, for: .preserveDeletedMessages)
 
         let data = try JSONEncoder().encode(settings)
         let decoded = try JSONDecoder().decode(MonogramSettings.self, from: data)
 
         XCTAssertEqual(decoded, settings)
         XCTAssertTrue(decoded.isEnabled(.localBookmarks))
-        XCTAssertTrue(decoded.isEnabled(.developerTools))
+        XCTAssertTrue(decoded.isEnabled(.preserveDeletedMessages))
     }
 
     func testLegacyMissingFieldsDecodeWithSafeDefaults() throws {

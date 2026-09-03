@@ -38,6 +38,7 @@ import ChatMessageItemView
 import ChatMessageBubbleItemNode
 import AdsInfoScreen
 import AdsReportScreen
+import ItemListUI
 import MonogramCore
  
 private struct MessageContextMenuData {
@@ -52,7 +53,84 @@ private struct MessageContextMenuData {
 
 private struct MonogramMessageContextData {
     let areBookmarksEnabled: Bool
+    let areLocalPinsEnabled: Bool
+    let showsPowerUserInformation: Bool
+    let ghostModeEnabled: Bool
+    let ghostExcludesPeer: Bool
     let bookmark: MonogramBookmark?
+    let editHistory: MonogramEditHistory?
+}
+
+private enum MonogramEditHistoryEntryId: Hashable {
+    case revision(Int)
+}
+
+private enum MonogramEditHistoryEntry: ItemListNodeEntry {
+    case revision(index: Int, text: String)
+
+    var section: ItemListSectionId {
+        return 0
+    }
+
+    var stableId: MonogramEditHistoryEntryId {
+        switch self {
+        case let .revision(index, _):
+            return .revision(index)
+        }
+    }
+
+    static func ==(lhs: MonogramEditHistoryEntry, rhs: MonogramEditHistoryEntry) -> Bool {
+        switch (lhs, rhs) {
+        case let (.revision(lhsIndex, lhsText), .revision(rhsIndex, rhsText)):
+            return lhsIndex == rhsIndex && lhsText == rhsText
+        }
+    }
+
+    static func <(lhs: MonogramEditHistoryEntry, rhs: MonogramEditHistoryEntry) -> Bool {
+        switch (lhs, rhs) {
+        case let (.revision(lhsIndex, _), .revision(rhsIndex, _)):
+            return lhsIndex < rhsIndex
+        }
+    }
+
+    func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
+        switch self {
+        case let .revision(_, text):
+            return ItemListMultilineTextItem(presentationData: presentationData, text: text, enabledEntityTypes: [], sectionId: self.section, style: .blocks)
+        }
+    }
+}
+
+private func monogramEditHistoryEntries(revisions: [MonogramMessageRevision], currentText: String, currentTimestamp: Int32) -> [MonogramEditHistoryEntry] {
+    let formatter = DateFormatter()
+    formatter.locale = .current
+    formatter.dateStyle = .medium
+    formatter.timeStyle = .short
+
+    var versions: [(text: String, timestamp: Int64, isCurrent: Bool)] = revisions.map {
+        (text: $0.text, timestamp: $0.capturedAt, isCurrent: false)
+    }
+    versions.append((text: currentText, timestamp: Int64(currentTimestamp), isCurrent: true))
+
+    return versions.enumerated().map { index, version in
+        let date = formatter.string(from: Date(timeIntervalSince1970: TimeInterval(version.timestamp)))
+        let title = version.isCurrent ? "Текущая версия" : "Версия \(index + 1)"
+        let text = version.text.isEmpty ? "[без текста]" : version.text
+        return .revision(index: index, text: "\(title) · \(date)\n\(text)")
+    }
+}
+
+private func monogramEditHistoryController(context: AccountContext, revisions: [MonogramMessageRevision], currentText: String, currentTimestamp: Int32) -> ViewController {
+    let state = context.sharedContext.presentationData
+    |> map { presentationData -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        let entries = monogramEditHistoryEntries(revisions: revisions, currentText: currentText, currentTimestamp: currentTimestamp)
+        let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Изменения"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
+        let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: false)
+        return (controllerState, (listState, ()))
+    }
+    let controller = ItemListController(context: context, state: state)
+    controller.navigationPresentation = .modal
+    return controller
 }
 
 func canEditMessage(context: AccountContext, limitsConfiguration: EngineConfiguration.Limits, message: EngineRawMessage) -> Bool {
@@ -899,13 +977,19 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
 
     let monogramMessageContextData = combineLatest(
         monogramAccountSettings(postbox: context.account.postbox),
-        monogramBookmark(postbox: context.account.postbox, messageId: messages[0].id)
+        monogramBookmark(postbox: context.account.postbox, messageId: messages[0].id),
+        monogramEditHistory(postbox: context.account.postbox, messageId: messages[0].id)
     )
     |> take(1)
-    |> map { settings, bookmark in
+    |> map { settings, bookmark, editHistory in
         return MonogramMessageContextData(
             areBookmarksEnabled: settings.isEnabled(.localBookmarks),
-            bookmark: bookmark
+            areLocalPinsEnabled: settings.isEnabled(.localMessagePins),
+            showsPowerUserInformation: settings.isEnabled(.powerUserInformation),
+            ghostModeEnabled: settings.isEnabled(.ghostMode),
+            ghostExcludesPeer: settings.ghostModeExcludedPeerIds.contains(messages[0].id.peerId.toInt64()),
+            bookmark: bookmark,
+            editHistory: settings.isEnabled(.preserveEditHistory) ? editHistory : nil
         )
     }
 
@@ -1947,6 +2031,16 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         }
 
         let isMonogramBookmarkEphemeral = message.containsSecretMedia || Namespaces.Message.allEphemeral.contains(message.id.namespace)
+        if messages.count == 1 && message.id.namespace == Namespaces.Message.MonogramLocal {
+            actions.append(.action(ContextMenuActionItem(text: "Удалить локальную копию", textColor: .destructive, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Delete"), color: theme.actionSheet.destructiveActionTextColor)
+            }, action: { _, f in
+                let _ = context.account.postbox.transaction { transaction -> Void in
+                    transaction.deleteMessages([message.id], forEachMedia: nil)
+                }.start()
+                f(.default)
+            })))
+        }
         if monogramData.areBookmarksEnabled && messages.count == 1 && MonogramLocalDataPolicy.bookmarkDenialReason(messageId: message.id, isCopyProtected: isCopyProtected, isEphemeral: isMonogramBookmarkEphemeral) == nil {
             let isBookmarked = monogramData.bookmark != nil
             actions.append(.action(ContextMenuActionItem(text: isBookmarked ? chatPresentationInterfaceState.strings.Monogram_Bookmark_Remove : chatPresentationInterfaceState.strings.Monogram_Bookmark_Add, icon: { theme in
@@ -1964,6 +2058,83 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                         isEphemeral: isMonogramBookmarkEphemeral
                     ).start()
                 }
+                f(.default)
+            })))
+        }
+
+        if monogramData.areLocalPinsEnabled && messages.count == 1 && MonogramLocalDataPolicy.bookmarkDenialReason(messageId: message.id, isCopyProtected: isCopyProtected, isEphemeral: isMonogramBookmarkEphemeral) == nil {
+            let pinTag = "monogram-pin"
+            let isLocallyPinned = monogramData.bookmark?.tags.contains(pinTag) == true
+            actions.append(.action(ContextMenuActionItem(text: isLocallyPinned ? "Открепить локально" : "Закрепить локально", icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: isLocallyPinned ? "Chat/Context Menu/Unpin" : "Chat/Context Menu/Pin"), color: theme.actionSheet.primaryTextColor)
+            }, action: { _, f in
+                var tags = monogramData.bookmark?.tags ?? []
+                if isLocallyPinned {
+                    tags.removeAll(where: { $0 == pinTag })
+                } else {
+                    tags.append(pinTag)
+                }
+                if isLocallyPinned && tags.isEmpty && monogramData.bookmark?.note == nil, let bookmark = monogramData.bookmark {
+                    let _ = removeMonogramBookmark(postbox: context.account.postbox, id: bookmark.id).start()
+                } else {
+                    let _ = setMonogramBookmark(
+                        postbox: context.account.postbox,
+                        messageId: message.id,
+                        note: monogramData.bookmark?.note,
+                        tags: tags,
+                        isCopyProtected: isCopyProtected,
+                        isEphemeral: isMonogramBookmarkEphemeral
+                    ).start()
+                }
+                f(.default)
+            })))
+        }
+
+        if messages.count == 1, let editHistory = monogramData.editHistory, !editHistory.revisions.isEmpty {
+            actions.append(.action(ContextMenuActionItem(text: "Изменения (\(editHistory.revisions.count + 1))", icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/History"), color: theme.actionSheet.primaryTextColor)
+            }, action: { c, _ in
+                let currentTimestamp = message.editedTime.flatMap { $0 != 0 ? $0 : nil } ?? message.timestamp
+                c?.dismiss(completion: {
+                    controllerInteraction.presentController(monogramEditHistoryController(
+                        context: context,
+                        revisions: editHistory.revisions,
+                        currentText: message.text,
+                        currentTimestamp: currentTimestamp
+                    ), nil)
+                })
+            })))
+        }
+
+        if monogramData.showsPowerUserInformation && messages.count == 1 {
+            actions.append(.action(ContextMenuActionItem(text: "Скопировать ID сообщения", icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.actionSheet.primaryTextColor)
+            }, action: { _, f in
+                UIPasteboard.general.string = "peer=\(message.id.peerId.toInt64()) message=\(message.id.id) namespace=\(message.id.namespace)"
+                f(.default)
+            })))
+        }
+
+        if monogramData.ghostModeEnabled && messages.count == 1 {
+            actions.append(.action(ContextMenuActionItem(text: "Отметить прочитанным сейчас", icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Read"), color: theme.actionSheet.primaryTextColor)
+            }, action: { _, f in
+                let _ = context.engine.messages.applyMaxReadIndexInteractively(index: message.index).start()
+                f(.default)
+            })))
+            actions.append(.action(ContextMenuActionItem(text: monogramData.ghostExcludesPeer ? "Включить Ghost Mode в этом чате" : "Исключить чат из Ghost Mode", icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Restrict"), color: theme.actionSheet.primaryTextColor)
+            }, action: { _, f in
+                let peerValue = message.id.peerId.toInt64()
+                let _ = updateMonogramAccountSettingsInteractively(postbox: context.account.postbox, { settings in
+                    var settings = settings
+                    if let index = settings.ghostModeExcludedPeerIds.firstIndex(of: peerValue) {
+                        settings.ghostModeExcludedPeerIds.remove(at: index)
+                    } else {
+                        settings.ghostModeExcludedPeerIds.append(peerValue)
+                    }
+                    return settings
+                }).start()
                 f(.default)
             })))
         }
