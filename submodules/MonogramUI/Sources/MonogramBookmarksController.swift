@@ -60,19 +60,6 @@ private enum MonogramBookmarksEntry: ItemListNodeEntry {
         }
     }
 
-    static func ==(lhs: MonogramBookmarksEntry, rhs: MonogramBookmarksEntry) -> Bool {
-        switch (lhs, rhs) {
-        case let (.search(lhsText, lhsPlaceholder), .search(rhsText, rhsPlaceholder)):
-            return lhsText == rhsText && lhsPlaceholder == rhsPlaceholder
-        case let (.empty(lhsText), .empty(rhsText)):
-            return lhsText == rhsText
-        case let (.bookmark(lhsIndex, lhsValue, lhsTitle, lhsLabel), .bookmark(rhsIndex, rhsValue, rhsTitle, rhsLabel)):
-            return lhsIndex == rhsIndex && lhsValue == rhsValue && lhsTitle == rhsTitle && lhsLabel == rhsLabel
-        default:
-            return false
-        }
-    }
-
     static func <(lhs: MonogramBookmarksEntry, rhs: MonogramBookmarksEntry) -> Bool {
         return lhs.sortIndex < rhs.sortIndex
     }
@@ -150,6 +137,7 @@ public func monogramBookmarksController(
     let filteredBookmarks = queryPromise.get()
     |> mapToSignal { query in
         return searchMonogramBookmarks(postbox: context.account.postbox, query: query)
+        |> map { (query, $0) }
     }
     let arguments = MonogramBookmarksControllerArguments(updateQuery: { query in
         queryPromise.set(query)
@@ -160,11 +148,10 @@ public func monogramBookmarksController(
     })
     let signal = combineLatest(
         context.sharedContext.presentationData,
-        queryPromise.get(),
         filteredBookmarks
     )
     |> deliverOnMainQueue
-    |> map { presentationData, query, bookmarks -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, searchResult -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let controllerState = ItemListControllerState(
             presentationData: ItemListPresentationData(presentationData),
             title: .text(presentationData.strings.Monogram_Bookmarks_Title),
@@ -174,7 +161,7 @@ public func monogramBookmarksController(
         )
         let listState = ItemListNodeState(
             presentationData: ItemListPresentationData(presentationData),
-            entries: monogramBookmarksEntries(presentationData: presentationData, query: query, bookmarks: bookmarks),
+            entries: monogramBookmarksEntries(presentationData: presentationData, query: searchResult.0, bookmarks: searchResult.1),
             style: .blocks,
             animateChanges: true
         )

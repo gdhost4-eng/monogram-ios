@@ -59,19 +59,6 @@ private enum MonogramPeerAnnotationsEntry: ItemListNodeEntry {
         }
     }
 
-    static func == (lhs: MonogramPeerAnnotationsEntry, rhs: MonogramPeerAnnotationsEntry) -> Bool {
-        switch (lhs, rhs) {
-        case let (.search(lhsValue), .search(rhsValue)):
-            return lhsValue == rhsValue
-        case let (.empty(lhsValue), .empty(rhsValue)):
-            return lhsValue == rhsValue
-        case let (.annotation(lhsIndex, lhsValue), .annotation(rhsIndex, rhsValue)):
-            return lhsIndex == rhsIndex && lhsValue == rhsValue
-        default:
-            return false
-        }
-    }
-
     static func < (lhs: MonogramPeerAnnotationsEntry, rhs: MonogramPeerAnnotationsEntry) -> Bool {
         return lhs.order < rhs.order
     }
@@ -93,7 +80,11 @@ private enum MonogramPeerAnnotationsEntry: ItemListNodeEntry {
 public func monogramPeerAnnotationsController(context: AccountContext) -> ViewController {
     var pushController: ((ViewController) -> Void)?
     let query = ValuePromise<String>("", ignoreRepeated: true)
-    let values = query.get() |> mapToSignal { searchMonogramPeerAnnotations(postbox: context.account.postbox, query: $0) }
+    let values = query.get()
+    |> mapToSignal { query in
+        return searchMonogramPeerAnnotations(postbox: context.account.postbox, query: query)
+        |> map { (query, $0) }
+    }
     let arguments = MonogramPeerAnnotationsArguments(updateQuery: { query.set($0) }, open: { annotation in
         pushController?(monogramPeerAnnotationEditorController(
             context: context,
@@ -103,9 +94,10 @@ public func monogramPeerAnnotationsController(context: AccountContext) -> ViewCo
             allowsTags: MonogramRuntimePolicy.isEnabled(.customTags, accountPeerId: context.account.peerId)
         ))
     })
-    let signal = combineLatest(context.sharedContext.presentationData, query.get(), values)
+    let signal = combineLatest(context.sharedContext.presentationData, values)
     |> deliverOnMainQueue
-    |> map { presentationData, queryValue, annotations -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, searchResult -> (ItemListControllerState, (ItemListNodeState, Any)) in
+        let (queryValue, annotations) = searchResult
         var entries: [MonogramPeerAnnotationsEntry] = [.search(queryValue)]
         if annotations.isEmpty {
             entries.append(.empty(queryValue.isEmpty ? "Локальных заметок пока нет." : "Ничего не найдено."))

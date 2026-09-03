@@ -986,7 +986,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             areBookmarksEnabled: settings.isEnabled(.localBookmarks),
             areLocalPinsEnabled: settings.isEnabled(.localMessagePins),
             showsPowerUserInformation: settings.isEnabled(.powerUserInformation),
-            ghostModeEnabled: settings.isEnabled(.ghostMode),
+            ghostModeEnabled: settings.isGhostModeActive(),
             ghostExcludesPeer: settings.ghostModeExcludedPeerIds.contains(messages[0].id.peerId.toInt64()),
             bookmark: bookmark,
             editHistory: settings.isEnabled(.preserveEditHistory) ? editHistory : nil

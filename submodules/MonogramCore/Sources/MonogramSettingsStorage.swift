@@ -18,6 +18,7 @@ public func monogramGlobalSettings(
         let settings = view.entries[MonogramSettingsKeys.global]?.get(MonogramSettings.self) ?? MonogramSettings()
         return settings.migratedToCurrentSchema()
     }
+    |> distinctUntilChanged
 }
 
 public func updateMonogramGlobalSettingsInteractively(
@@ -38,6 +39,7 @@ public func monogramAccountSettings(postbox: Postbox) -> Signal<MonogramSettings
         let settings = view.values[MonogramSettingsKeys.account]?.get(MonogramSettings.self) ?? MonogramSettings()
         return settings.migratedToCurrentSchema()
     }
+    |> distinctUntilChanged
 }
 
 public func updateMonogramAccountSettingsInteractively(

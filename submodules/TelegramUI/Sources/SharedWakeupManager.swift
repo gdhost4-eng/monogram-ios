@@ -260,7 +260,7 @@ public final class SharedWakeupManager {
                 let userInterfaceInUse = accountUserInterfaceInUse(account.id)
                 let suppressOnlinePresence = monogramAccountSettings(postbox: account.postbox)
                 |> mapToSignal { settings -> Signal<Bool, NoError> in
-                    guard settings.isEnabled(.ghostMode) else {
+                    guard settings.isGhostModeActive() else {
                         return .single(false)
                     }
                     if let expiresAt = settings.ghostModeExpiresAt {

@@ -73,22 +73,6 @@ private enum MonogramBookmarkEditorEntry: ItemListNodeEntry {
         }
     }
 
-    static func ==(lhs: MonogramBookmarkEditorEntry, rhs: MonogramBookmarkEditorEntry) -> Bool {
-        switch (lhs, rhs) {
-        case let (.noteHeader(lhsText), .noteHeader(rhsText)),
-             let (.tagsHeader(lhsText), .tagsHeader(rhsText)),
-             let (.tagsInfo(lhsText), .tagsInfo(rhsText)),
-             let (.openMessage(lhsText), .openMessage(rhsText)),
-             let (.delete(lhsText), .delete(rhsText)):
-            return lhsText == rhsText
-        case let (.note(lhsText, lhsPlaceholder), .note(rhsText, rhsPlaceholder)),
-             let (.tags(lhsText, lhsPlaceholder), .tags(rhsText, rhsPlaceholder)):
-            return lhsText == rhsText && lhsPlaceholder == rhsPlaceholder
-        default:
-            return false
-        }
-    }
-
     static func <(lhs: MonogramBookmarkEditorEntry, rhs: MonogramBookmarkEditorEntry) -> Bool {
         return lhs.stableId < rhs.stableId
     }
@@ -192,8 +176,7 @@ public func monogramBookmarkEditorController(
     let signal = combineLatest(context.sharedContext.presentationData, statePromise.get())
     |> deliverOnMainQueue
     |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, Any)) in
-        var presentationData = presentationData
-        presentationData = presentationData.withUpdated(theme: presentationData.theme.withModalBlocksBackground())
+        let presentationData = presentationData.withUpdated(theme: presentationData.theme.withModalBlocksBackground())
 
         let rightNavigationButton = ItemListNavigationButton(content: .icon(.done), style: .bold, enabled: true, action: {
             let _ = (setMonogramBookmark(

@@ -31,10 +31,7 @@ public enum MonogramRuntimePolicy {
         self.lock.lock()
         let settings = self.accountSettings[accountPeerId]
         self.lock.unlock()
-        guard let settings, settings.isEnabled(.ghostMode) else {
-            return nil
-        }
-        if let expiresAt = settings.ghostModeExpiresAt, expiresAt <= Int64(Date().timeIntervalSince1970) {
+        guard let settings, settings.isGhostModeActive() else {
             return nil
         }
         if let peerId, settings.ghostModeExcludedPeerIds.contains(peerId.toInt64()) {

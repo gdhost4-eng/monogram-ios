@@ -65,21 +65,6 @@ private enum MonogramPeerAnnotationEditorEntry: ItemListNodeEntry {
         }
     }
 
-    static func ==(lhs: MonogramPeerAnnotationEditorEntry, rhs: MonogramPeerAnnotationEditorEntry) -> Bool {
-        switch (lhs, rhs) {
-        case let (.noteHeader(lhsText), .noteHeader(rhsText)),
-             let (.tagsHeader(lhsText), .tagsHeader(rhsText)),
-             let (.privacyInfo(lhsText), .privacyInfo(rhsText)),
-             let (.delete(lhsText), .delete(rhsText)):
-            return lhsText == rhsText
-        case let (.note(lhsText, lhsPlaceholder), .note(rhsText, rhsPlaceholder)),
-             let (.tags(lhsText, lhsPlaceholder), .tags(rhsText, rhsPlaceholder)):
-            return lhsText == rhsText && lhsPlaceholder == rhsPlaceholder
-        default:
-            return false
-        }
-    }
-
     static func <(lhs: MonogramPeerAnnotationEditorEntry, rhs: MonogramPeerAnnotationEditorEntry) -> Bool {
         return lhs.stableId < rhs.stableId
     }
@@ -186,8 +171,7 @@ public func monogramPeerAnnotationEditorController(
     let signal = combineLatest(context.sharedContext.presentationData, statePromise.get())
     |> deliverOnMainQueue
     |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, Any)) in
-        var presentationData = presentationData
-        presentationData = presentationData.withUpdated(theme: presentationData.theme.withModalBlocksBackground())
+        let presentationData = presentationData.withUpdated(theme: presentationData.theme.withModalBlocksBackground())
 
         let rightNavigationButton = ItemListNavigationButton(content: .icon(.done), style: .bold, enabled: allowsNote || allowsTags, action: {
             let note = allowsNote ? state.note : annotation?.note
