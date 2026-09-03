@@ -42,6 +42,7 @@ class BuildConfiguration:
         string += 'telegram_use_xcode_managed_codesigning = {}\n'.format('True' if use_xcode_managed_codesigning else 'False')
         string += 'telegram_bundle_id = "{}"\n'.format(self.bundle_id)
         string += 'telegram_api_id = "{}"\n'.format(self.api_id)
+        string += 'telegram_api_hash = "{}"\n'.format(self.api_hash)
 
         string += 'telegram_team_id = "{}"\n'.format(self.team_id)
         string += 'telegram_app_center_id = "{}"\n'.format(self.app_center_id)

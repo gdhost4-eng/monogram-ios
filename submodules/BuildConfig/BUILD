@@ -1,6 +1,7 @@
 load(
     "@build_configuration//:variables.bzl",
     "telegram_api_id",
+    "telegram_api_hash",
 
     "telegram_app_center_id",
     "telegram_is_internal_build",
@@ -21,6 +22,7 @@ objc_library(
     copts = [
         "-Werror",
         "-DAPP_CONFIG_API_ID={}".format(telegram_api_id),
+        "-DAPP_CONFIG_API_HASH=\\\"{}\\\"".format(telegram_api_hash),
 
         "-DAPP_CONFIG_APP_CENTER_ID=\\\"{}\\\"".format(telegram_app_center_id),
         "-DAPP_CONFIG_IS_INTERNAL_BUILD={}".format(telegram_is_internal_build),
