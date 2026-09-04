@@ -38,6 +38,7 @@ import ChatMessageItemView
 import ChatMessageBubbleItemNode
 import AdsInfoScreen
 import AdsReportScreen
+import MonogramCore
  
 private struct MessageContextMenuData {
     let starStatus: Bool?
@@ -47,6 +48,11 @@ private struct MessageContextMenuData {
     let canSelect: Bool
     let resourceStatus: EngineMediaResource.FetchStatus?
     let messageActions: ChatAvailableMessageActions
+}
+
+private struct MonogramMessageContextData {
+    let areBookmarksEnabled: Bool
+    let bookmark: MonogramBookmark?
 }
 
 func canEditMessage(context: AccountContext, limitsConfiguration: EngineConfiguration.Limits, message: EngineRawMessage) -> Bool {
@@ -890,8 +896,25 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
     }
     
     let isScheduled = chatPresentationInterfaceState.subject == .scheduledMessages
+
+    let monogramMessageContextData = combineLatest(
+        monogramAccountSettings(postbox: context.account.postbox),
+        monogramBookmark(postbox: context.account.postbox, messageId: messages[0].id)
+    )
+    |> take(1)
+    |> map { settings, bookmark in
+        return MonogramMessageContextData(
+            areBookmarksEnabled: settings.isEnabled(.localBookmarks),
+            bookmark: bookmark
+        )
+    }
+
+    let accountPeerAndMonogramData = combineLatest(
+        context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId)),
+        monogramMessageContextData
+    )
     
-    let dataSignal: Signal<(MessageContextMenuData, [EngineMessage.Id: ChatUpdatingMessageMedia], InfoSummaryData, AppConfiguration, Bool, Int32, AvailableReactions?, TranslationSettings, LoggingSettings, NotificationSoundList?, EnginePeer?), NoError> = combineLatest(
+    let dataSignal: Signal<(MessageContextMenuData, [EngineMessage.Id: ChatUpdatingMessageMedia], InfoSummaryData, AppConfiguration, Bool, Int32, AvailableReactions?, TranslationSettings, LoggingSettings, NotificationSoundList?, (EnginePeer?, MonogramMessageContextData)), NoError> = combineLatest(
         loadLimits,
         loadStickerSaveStatusSignal,
         loadResourceStatusSignal,
@@ -904,9 +927,9 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         context.engine.stickers.availableReactions(),
         context.sharedContext.accountManager.sharedData(keys: [ApplicationSpecificSharedDataKeys.translationSettings, SharedDataKeys.loggingSettings]) |> take(1),
         context.engine.peers.notificationSoundList() |> take(1),
-        context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: context.account.peerId))
+        accountPeerAndMonogramData
     )
-    |> map { limitsAndAppConfig, stickerSaveStatus, resourceStatus, messageActions, updatingMessageMedia, infoSummaryData, isMessageRead, messageViewsPrivacyTips, availableReactions, sharedData, notificationSoundList, accountPeer -> (MessageContextMenuData, [EngineMessage.Id: ChatUpdatingMessageMedia], InfoSummaryData, AppConfiguration, Bool, Int32, AvailableReactions?, TranslationSettings, LoggingSettings, NotificationSoundList?, EnginePeer?) in
+    |> map { limitsAndAppConfig, stickerSaveStatus, resourceStatus, messageActions, updatingMessageMedia, infoSummaryData, isMessageRead, messageViewsPrivacyTips, availableReactions, sharedData, notificationSoundList, accountPeerAndMonogramData -> (MessageContextMenuData, [EngineMessage.Id: ChatUpdatingMessageMedia], InfoSummaryData, AppConfiguration, Bool, Int32, AvailableReactions?, TranslationSettings, LoggingSettings, NotificationSoundList?, (EnginePeer?, MonogramMessageContextData)) in
         let (limitsConfiguration, appConfig) = limitsAndAppConfig
         var canEdit = false
         if !isAction {
@@ -954,12 +977,13 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             messageActions: messageActions
         )
         
-        return (data, updatingMessageMedia, infoSummaryData, appConfig, isMessageRead, messageViewsPrivacyTips, availableReactions, translationSettings, loggingSettings, notificationSoundList, accountPeer)
+        return (data, updatingMessageMedia, infoSummaryData, appConfig, isMessageRead, messageViewsPrivacyTips, availableReactions, translationSettings, loggingSettings, notificationSoundList, accountPeerAndMonogramData)
     }
     
     return dataSignal
     |> deliverOnMainQueue
-    |> map { data, updatingMessageMedia, infoSummaryData, appConfig, isMessageRead, messageViewsPrivacyTips, availableReactions, translationSettings, loggingSettings, notificationSoundList, accountPeer -> ContextController.Items in
+    |> map { data, updatingMessageMedia, infoSummaryData, appConfig, isMessageRead, messageViewsPrivacyTips, availableReactions, translationSettings, loggingSettings, notificationSoundList, accountPeerAndMonogramData -> ContextController.Items in
+        let (accountPeer, monogramData) = accountPeerAndMonogramData
         let isPremium = accountPeer?.isPremium ?? false
 
         var actions: [ContextMenuItem] = []
@@ -1919,6 +1943,28 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             }, action: { _, f in
                 let _ = controllerInteraction.openMessage(message, OpenMessageParams(mode: .default))
                 f(.dismissWithoutContent)
+            })))
+        }
+
+        let isMonogramBookmarkEphemeral = message.containsSecretMedia || Namespaces.Message.allEphemeral.contains(message.id.namespace)
+        if monogramData.areBookmarksEnabled && messages.count == 1 && MonogramLocalDataPolicy.bookmarkDenialReason(messageId: message.id, isCopyProtected: isCopyProtected, isEphemeral: isMonogramBookmarkEphemeral) == nil {
+            let isBookmarked = monogramData.bookmark != nil
+            actions.append(.action(ContextMenuActionItem(text: isBookmarked ? chatPresentationInterfaceState.strings.Monogram_Bookmark_Remove : chatPresentationInterfaceState.strings.Monogram_Bookmark_Add, icon: { theme in
+                return generateTintedImage(image: UIImage(bundleImageName: isBookmarked ? "Chat/Context Menu/Unfave" : "Chat/Context Menu/Fave"), color: theme.actionSheet.primaryTextColor)
+            }, action: { _, f in
+                if let bookmark = monogramData.bookmark {
+                    let _ = removeMonogramBookmark(postbox: context.account.postbox, id: bookmark.id).start()
+                } else {
+                    let _ = setMonogramBookmark(
+                        postbox: context.account.postbox,
+                        messageId: message.id,
+                        note: nil,
+                        tags: [],
+                        isCopyProtected: isCopyProtected,
+                        isEphemeral: isMonogramBookmarkEphemeral
+                    ).start()
+                }
+                f(.default)
             })))
         }
 

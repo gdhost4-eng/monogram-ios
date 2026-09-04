@@ -13,7 +13,7 @@ import AlertUI
 import PresentationDataUtils
 import UrlHandling
 import AccountUtils
-import PremiumUI
+import MonogramCore
 import PasswordSetupUI
 import StorageUsageScreen
 import AlertComponent
@@ -196,42 +196,12 @@ public func deleteAccountOptionsController(context: AccountContext, navigationCo
         })
     }, addAccount: {
         context.engine.accountData.addAppLogEvent(type: "deactivate.options_add_account_tap")
-        
-        let _ = (activeAccountsAndPeers(context: context)
-        |> take(1)
-        |> deliverOnMainQueue
-        ).start(next: { accountAndPeer, accountsAndPeers in
-            var maximumAvailableAccounts: Int = 3
-            if accountAndPeer?.1.isPremium == true && !context.account.testingEnvironment {
-                maximumAvailableAccounts = 4
-            }
-            var count: Int = 1
-            for (accountContext, peer, _) in accountsAndPeers {
-                if !accountContext.account.testingEnvironment {
-                    if peer.isPremium {
-                        maximumAvailableAccounts = 4
-                    }
-                    count += 1
-                }
-            }
 
-            if count >= maximumAvailableAccounts {
-                var replaceImpl: ((ViewController) -> Void)?
-                let controller = PremiumLimitScreen(context: context, subject: .accounts, count: Int32(count), action: {
-                    let controller = PremiumIntroScreen(context: context, source: .accounts)
-                    replaceImpl?(controller)
-                    return true
-                })
-                replaceImpl = { [weak controller] c in
-                    controller?.replace(with: c)
-                }
-                pushControllerImpl?(controller)
-            } else {
-                context.sharedContext.beginNewAuth(testingEnvironment: context.account.testingEnvironment)
-
-                dismissImpl?()
-            }
-        })
+        guard MonogramAccountPolicy.allowsAddingAnotherAccount else {
+            return
+        }
+        context.sharedContext.beginNewAuth(testingEnvironment: context.account.testingEnvironment)
+        dismissImpl?()
     }, setupPrivacy: {
         context.engine.accountData.addAppLogEvent(type: "deactivate.options_privacy_tap")
         
@@ -404,10 +374,9 @@ public func deleteAccountOptionsController(context: AccountContext, navigationCo
 
     let signal = combineLatest(queue: .mainQueue(),
         context.sharedContext.presentationData,
-        context.sharedContext.accountManager.accessChallengeData(),
-        activeAccountsAndPeers(context: context)
+        context.sharedContext.accountManager.accessChallengeData()
     )
-    |> map { presentationData, accessChallengeData, accountsAndPeers -> (ItemListControllerState, (ItemListNodeState, Any)) in
+    |> map { presentationData, accessChallengeData -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let leftNavigationButton = ItemListNavigationButton(content: .icon(.close), style: .regular, enabled: true, action: {
             dismissImpl?()
         })
@@ -420,7 +389,7 @@ public func deleteAccountOptionsController(context: AccountContext, navigationCo
                 break
         }
         
-        let canAddAccounts = accountsAndPeers.1.count + 1 < maximumNumberOfAccounts
+        let canAddAccounts = MonogramAccountPolicy.allowsAddingAnotherAccount
 
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text(presentationData.strings.DeleteAccount_AlternativeOptionsTitle), leftNavigationButton: leftNavigationButton, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: deleteAccountOptionsEntries(presentationData: presentationData, canAddAccounts: canAddAccounts, hasTwoStepAuth: hasTwoStepAuth, hasPasscode: hasPasscode), style: .blocks)
