@@ -14,12 +14,23 @@ public struct MonogramMessageRevision: Codable, Equatable {
 }
 
 public struct MonogramEditHistory: Codable, Equatable {
+    public static let maximumRevisionCount = 50
+
     public let messageId: MessageId
     public var revisions: [MonogramMessageRevision]
 
     public init(messageId: MessageId, revisions: [MonogramMessageRevision]) {
         self.messageId = messageId
         self.revisions = revisions
+    }
+
+    public mutating func recordPreviousText(_ text: String, at timestamp: Int64) {
+        if self.revisions.last?.text != text {
+            self.revisions.append(MonogramMessageRevision(text: text, capturedAt: timestamp))
+        }
+        if self.revisions.count > Self.maximumRevisionCount {
+            self.revisions.removeFirst(self.revisions.count - Self.maximumRevisionCount)
+        }
     }
 }
 
@@ -57,10 +68,7 @@ public func captureMonogramMessageEdits(
         guard case let .Id(updatedId) = updated.id, updatedId == previous.id else {
             continue
         }
-        guard previous.id.namespace == Namespaces.Message.Cloud,
-              previous.id.peerId.namespace != Namespaces.Peer.SecretChat,
-              !previous.flags.contains(.CopyProtected),
-              !previous.attributes.contains(where: { $0 is AutoremoveTimeoutMessageAttribute || $0 is AutoclearTimeoutMessageAttribute }),
+        guard MonogramLocalDataPolicy.allowsMessagePreservation(previous),
               previous.text != updated.text else {
             continue
         }
@@ -68,12 +76,7 @@ public func captureMonogramMessageEdits(
         let itemId = monogramEditHistoryItemId(previous.id)
         let existingEntry = transaction.getOrderedItemListItem(collectionId: monogramEditHistoryCollectionId, itemId: itemId)
         var history = existingEntry.flatMap(decodeMonogramEditHistory) ?? MonogramEditHistory(messageId: previous.id, revisions: [])
-        if history.revisions.last?.text != previous.text {
-            history.revisions.append(MonogramMessageRevision(text: previous.text, capturedAt: timestamp))
-        }
-        if history.revisions.count > 50 {
-            history.revisions.removeFirst(history.revisions.count - 50)
-        }
+        history.recordPreviousText(previous.text, at: timestamp)
         if let contents = CodableEntry(history) {
             transaction.addOrMoveToFirstPositionOrderedItemListItem(
                 collectionId: monogramEditHistoryCollectionId,

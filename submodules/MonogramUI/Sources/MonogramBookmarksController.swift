@@ -130,17 +130,17 @@ public func monogramBookmarksController(
     context: AccountContext,
     openMessage: @escaping (MessageId) -> Void
 ) -> ViewController {
-    var pushController: ((ViewController) -> Void)?
+    let navigation = MonogramControllerNavigation()
     let queryPromise = ValuePromise<String>("", ignoreRepeated: true)
     let filteredBookmarks = queryPromise.get()
     |> mapToSignal { query in
-        return searchMonogramBookmarks(postbox: context.account.postbox, query: query)
-        |> map { (query, $0.filter { $0.tags.contains("monogram-pin") }) }
+        return searchMonogramBookmarks(postbox: context.account.postbox, query: query, tags: [MonogramBookmark.localPinTag])
+        |> map { (query, $0) }
     }
     let arguments = MonogramBookmarksControllerArguments(updateQuery: { query in
         queryPromise.set(query)
     }, editBookmark: { bookmark in
-        pushController?(monogramBookmarkEditorController(context: context, bookmark: bookmark, openMessage: {
+        navigation.push(monogramBookmarkEditorController(context: context, bookmark: bookmark, openMessage: {
             openMessage(bookmark.messageId)
         }))
     })
@@ -167,8 +167,6 @@ public func monogramBookmarksController(
     }
 
     let controller = ItemListController(context: context, state: signal)
-    pushController = { [weak controller] childController in
-        controller?.push(childController)
-    }
+    navigation.controller = controller
     return controller
 }

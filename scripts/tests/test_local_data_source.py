@@ -51,18 +51,19 @@ class LocalDataSourceTests(unittest.TestCase):
     def test_bookmarks_list_is_account_scoped_and_navigable(self) -> None:
         controller = (CORE_SOURCES.parent.parent / "MonogramUI" / "Sources" / "MonogramBookmarksController.swift").read_text(encoding="utf-8")
         editor = (CORE_SOURCES.parent.parent / "MonogramUI" / "Sources" / "MonogramBookmarkEditorController.swift").read_text(encoding="utf-8")
-        advanced_settings = (CORE_SOURCES.parent.parent / "MonogramUI" / "Sources" / "MonogramAdvancedSettingsController.swift").read_text(encoding="utf-8")
+        advanced_settings = (CORE_SOURCES.parent.parent / "MonogramUI" / "Sources" / "MonogramAdvancedSettingsActions.swift").read_text(encoding="utf-8")
+        note_editor = (CORE_SOURCES.parent.parent / "MonogramUI" / "Sources" / "MonogramNoteEditorController.swift").read_text(encoding="utf-8")
 
         self.assertIn("searchMonogramBookmarks(postbox: context.account.postbox", controller)
         self.assertIn("queryPromise", controller)
         self.assertIn("arguments.editBookmark(value)", controller)
         self.assertIn("monogramBookmarkEditorController", controller)
-        self.assertIn('tags: ["monogram-pin"]', editor)
+        self.assertIn("tags: bookmark.tags + [MonogramBookmark.localPinTag]", editor)
         self.assertIn("removeMonogramBookmark", editor)
         self.assertIn("openMessage: openMessage", editor)
         self.assertIn("Открепить сообщение?", editor)
-        self.assertIn("TextAlertAction(type: .destructiveAction", editor)
-        self.assertIn("monogramBookmarksController(context: context", advanced_settings)
+        self.assertIn("TextAlertAction(type: .destructiveAction", note_editor)
+        self.assertIn("monogramBookmarksController(context: self.context", advanced_settings)
         self.assertIn("navigateToChatController", advanced_settings)
 
 

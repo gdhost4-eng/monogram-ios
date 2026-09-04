@@ -34,18 +34,23 @@ class MonogramFeaturesSourceTests(unittest.TestCase):
 
     def test_deleted_messages_use_isolated_namespace_and_sensitive_guards(self):
         transform = self.source("submodules/MonogramCore/Sources/MonogramDeletedMessageTransform.swift")
+        policy = self.source("submodules/MonogramCore/Sources/MonogramLocalDataPolicy.swift")
         namespaces = self.source("submodules/TelegramCore/Sources/SyncCore/SyncCore_Namespaces.swift")
         self.assertIn("MonogramLocal", namespaces)
         self.assertIn("Namespaces.Message.MonogramLocal", transform)
-        self.assertIn("Namespaces.Peer.SecretChat", transform)
-        self.assertIn("CopyProtected", transform)
-        self.assertIn("AutoremoveTimeoutMessageAttribute", transform)
+        self.assertIn("MonogramLocalDataPolicy.allowsMessagePreservation(message)", transform)
+        self.assertIn("Namespaces.Message.Cloud", policy)
+        self.assertIn("Namespaces.Peer.SecretChat", policy)
+        self.assertIn("CopyProtected", policy)
+        self.assertIn("AutoremoveTimeoutMessageAttribute", policy)
+        self.assertIn("AutoclearTimeoutMessageAttribute", policy)
 
     def test_edit_history_is_bounded_and_sensitive_content_is_rejected(self):
         history = self.source("submodules/MonogramCore/Sources/MonogramEditHistory.swift")
-        self.assertIn("history.revisions.count > 50", history)
-        self.assertIn("Namespaces.Peer.SecretChat", history)
-        self.assertIn("CopyProtected", history)
+        self.assertIn("maximumRevisionCount = 50", history)
+        self.assertIn("self.revisions.removeFirst(self.revisions.count - Self.maximumRevisionCount)", history)
+        self.assertIn("history.recordPreviousText(previous.text, at: timestamp)", history)
+        self.assertIn("MonogramLocalDataPolicy.allowsMessagePreservation(previous)", history)
 
     def test_chat_actions_expose_history_pins_and_manual_read(self):
         menu = self.source("submodules/TelegramUI/Sources/ChatInterfaceStateContextMenus.swift")

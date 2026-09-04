@@ -25,13 +25,7 @@ public enum MonogramDeletedMessageTransform {
 
         var result: [MessageId: StoreMessage] = [:]
         for message in messages {
-            guard message.id.namespace == Namespaces.Message.Cloud else {
-                continue
-            }
-            guard message.id.peerId.namespace != Namespaces.Peer.SecretChat else {
-                continue
-            }
-            guard !message.flags.contains(.CopyProtected) else {
+            guard MonogramLocalDataPolicy.allowsMessagePreservation(message) else {
                 continue
             }
             guard message.text != self.marker && !message.text.hasSuffix("\n\n" + self.marker) else {
@@ -39,55 +33,11 @@ public enum MonogramDeletedMessageTransform {
                 // previously preserved bubble.
                 continue
             }
-            guard !message.attributes.contains(where: { attribute in
-                return attribute is AutoremoveTimeoutMessageAttribute || attribute is AutoclearTimeoutMessageAttribute
-            }) else {
-                continue
-            }
-
-            let attributes = message.attributes.filter { attribute in
-                return !(attribute is AutoremoveTimeoutMessageAttribute) && !(attribute is AutoclearTimeoutMessageAttribute)
-            }
-            var flags = StoreMessageFlags(message.flags)
-            flags.remove(.TopIndexable)
-            flags.remove(.CountedAsIncoming)
-            flags.remove(.Unsent)
-            flags.remove(.Sending)
-            flags.remove(.Failed)
-            flags.remove(.ReactionsArePossible)
             // The namespace already isolates these IDs from server messages.
             // History lookups use nonnegative ID bounds.
             let localIdValue = max(1, message.id.id)
             let localId = MessageId(peerId: message.id.peerId, namespace: Namespaces.Message.MonogramLocal, id: localIdValue)
-            let preservedMedia: [Media] = message.media.compactMap { media in
-                if let file = media as? TelegramMediaFile {
-                    return mediaBox.completedResourcePath(file.resource) == nil ? nil : file
-                } else if let image = media as? TelegramMediaImage {
-                    let hasLocalRepresentation = image.representations.contains(where: { representation in
-                        return mediaBox.completedResourcePath(representation.resource) != nil
-                    })
-                    return hasLocalRepresentation ? image : nil
-                } else {
-                    return media
-                }
-            }
-            result[message.id] = StoreMessage(
-                id: localId,
-                customStableId: nil,
-                globallyUniqueId: nil,
-                groupingKey: nil,
-                threadId: message.threadId,
-                timestamp: message.timestamp,
-                flags: flags,
-                tags: message.tags,
-                globalTags: message.globalTags,
-                localTags: message.localTags,
-                forwardInfo: message.forwardInfo.map { StoreMessageForwardInfo($0) },
-                authorId: message.author?.id,
-                text: message.text.isEmpty ? self.marker : message.text + "\n\n" + self.marker,
-                attributes: attributes,
-                media: preservedMedia
-            )
+            result[message.id] = self.localCopy(of: message, id: localId, mediaBox: mediaBox)
             if let contents = CodableEntry(Record(messageId: localId)) {
                 transaction.addOrMoveToFirstPositionOrderedItemListItem(
                     collectionId: self.collectionId,
@@ -97,6 +47,46 @@ public enum MonogramDeletedMessageTransform {
             }
         }
         return result
+    }
+
+    private static func localCopy(of message: Message, id: MessageId, mediaBox: MediaBox) -> StoreMessage {
+        var flags = StoreMessageFlags(message.flags)
+        flags.remove(.TopIndexable)
+        flags.remove(.CountedAsIncoming)
+        flags.remove(.Unsent)
+        flags.remove(.Sending)
+        flags.remove(.Failed)
+        flags.remove(.ReactionsArePossible)
+        return StoreMessage(
+            id: id,
+            customStableId: nil,
+            globallyUniqueId: nil,
+            groupingKey: nil,
+            threadId: message.threadId,
+            timestamp: message.timestamp,
+            flags: flags,
+            tags: message.tags,
+            globalTags: message.globalTags,
+            localTags: message.localTags,
+            forwardInfo: message.forwardInfo.map { StoreMessageForwardInfo($0) },
+            authorId: message.author?.id,
+            text: message.text.isEmpty ? self.marker : message.text + "\n\n" + self.marker,
+            attributes: message.attributes,
+            media: message.media.compactMap { self.locallyAvailableMedia($0, mediaBox: mediaBox) }
+        )
+    }
+
+    private static func locallyAvailableMedia(_ media: Media, mediaBox: MediaBox) -> Media? {
+        if let file = media as? TelegramMediaFile {
+            return mediaBox.completedResourcePath(file.resource) == nil ? nil : file
+        } else if let image = media as? TelegramMediaImage {
+            let hasLocalRepresentation = image.representations.contains(where: {
+                mediaBox.completedResourcePath($0.resource) != nil
+            })
+            return hasLocalRepresentation ? image : nil
+        } else {
+            return media
+        }
     }
 
     public static func records(postbox: Postbox) -> Signal<[MessageId], NoError> {

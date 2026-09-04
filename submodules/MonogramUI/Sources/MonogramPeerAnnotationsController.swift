@@ -77,8 +77,18 @@ private enum MonogramPeerAnnotationsEntry: ItemListNodeEntry {
     }
 }
 
+private func monogramPeerAnnotationsEntries(query: String, annotations: [MonogramPeerAnnotation]) -> [MonogramPeerAnnotationsEntry] {
+    var entries: [MonogramPeerAnnotationsEntry] = [.search(query)]
+    if annotations.isEmpty {
+        entries.append(.empty(query.isEmpty ? "Локальных заметок пока нет." : "Ничего не найдено."))
+    } else {
+        entries.append(contentsOf: annotations.enumerated().map { .annotation($0.offset, $0.element) })
+    }
+    return entries
+}
+
 public func monogramPeerAnnotationsController(context: AccountContext) -> ViewController {
-    var pushController: ((ViewController) -> Void)?
+    let navigation = MonogramControllerNavigation()
     let query = ValuePromise<String>("", ignoreRepeated: true)
     let values = query.get()
     |> mapToSignal { query in
@@ -86,7 +96,7 @@ public func monogramPeerAnnotationsController(context: AccountContext) -> ViewCo
         |> map { (query, $0) }
     }
     let arguments = MonogramPeerAnnotationsArguments(updateQuery: { query.set($0) }, open: { annotation in
-        pushController?(monogramPeerAnnotationEditorController(
+        navigation.push(monogramPeerAnnotationEditorController(
             context: context,
             peerId: annotation.peerId,
             annotation: annotation
@@ -95,19 +105,13 @@ public func monogramPeerAnnotationsController(context: AccountContext) -> ViewCo
     let signal = combineLatest(context.sharedContext.presentationData, values)
     |> deliverOnMainQueue
     |> map { presentationData, searchResult -> (ItemListControllerState, (ItemListNodeState, Any)) in
-        let (queryValue, annotations) = searchResult
-        var entries: [MonogramPeerAnnotationsEntry] = [.search(queryValue)]
-        if annotations.isEmpty {
-            entries.append(.empty(queryValue.isEmpty ? "Локальных заметок пока нет." : "Ничего не найдено."))
-        } else {
-            entries.append(contentsOf: annotations.enumerated().map { .annotation($0.offset, $0.element) })
-        }
+        let entries = monogramPeerAnnotationsEntries(query: searchResult.0, annotations: searchResult.1)
         return (
             ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Локальные заметки"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back)),
             (ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: true), arguments)
         )
     }
     let controller = ItemListController(context: context, state: signal)
-    pushController = { [weak controller] in controller?.push($0) }
+    navigation.controller = controller
     return controller
 }

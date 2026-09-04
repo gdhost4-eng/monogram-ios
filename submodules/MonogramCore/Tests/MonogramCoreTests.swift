@@ -5,6 +5,58 @@ import TelegramCore
 import MonogramCore
 
 final class MonogramCoreTests: XCTestCase {
+    func testEditHistoryKeepsTheLatestFiftyDistinctConsecutiveVersions() {
+        let messageId = MessageId(peerId: PeerId(100), namespace: Namespaces.Message.Cloud, id: 42)
+        var history = MonogramEditHistory(messageId: messageId, revisions: [])
+        for index in 0..<55 {
+            history.recordPreviousText("Version \(index)", at: Int64(index))
+        }
+        XCTAssertEqual(history.revisions.count, 50)
+        XCTAssertEqual(history.revisions.first, MonogramMessageRevision(text: "Version 5", capturedAt: 5))
+        XCTAssertEqual(history.revisions.last, MonogramMessageRevision(text: "Version 54", capturedAt: 54))
+        history.recordPreviousText("Version 54", at: 100)
+        XCTAssertEqual(history.revisions.count, 50)
+        XCTAssertEqual(history.revisions.last?.capturedAt, 54)
+        // Returning to an older text is a new revision, not a duplicate.
+        history.recordPreviousText("Version 5", at: 101)
+        XCTAssertEqual(history.revisions.count, 50)
+        XCTAssertEqual(history.revisions.first?.text, "Version 6")
+        XCTAssertEqual(history.revisions.last, MonogramMessageRevision(text: "Version 5", capturedAt: 101))
+        XCTAssertEqual(history.messageId, messageId)
+    }
+
+    func testRuntimeOfflineEntrySuppressesActivityWithoutMarkingHistoryRead() {
+        let accountId = PeerId(301)
+        let excludedPeerId = PeerId(302)
+        MonogramOfflineEntry.resetSession()
+        defer {
+            MonogramRuntimePolicy.remove(accountPeerId: accountId)
+            MonogramOfflineEntry.resetSession()
+        }
+        var settings = MonogramSettings(ghostModeExcludedPeerIds: [excludedPeerId.toInt64()])
+        settings.setEnabled(true, for: .offlineEntry)
+        MonogramRuntimePolicy.update(accountPeerId: accountId, settings: settings)
+        XCTAssertTrue(MonogramRuntimePolicy.suppressesReadReceipts(accountPeerId: accountId, peerId: excludedPeerId))
+        XCTAssertTrue(MonogramRuntimePolicy.suppressesInputActivity(accountPeerId: accountId, peerId: excludedPeerId))
+        XCTAssertFalse(MonogramRuntimePolicy.readsHistoryLocally(accountPeerId: accountId))
+        MonogramOfflineEntry.goOnline(accountPeerId: accountId)
+        XCTAssertFalse(MonogramRuntimePolicy.suppressesReadReceipts(accountPeerId: accountId))
+        XCTAssertFalse(MonogramRuntimePolicy.suppressesInputActivity(accountPeerId: accountId))
+    }
+
+    func testLocalPinTagPreservesOtherBookmarkTags() {
+        let bookmark = MonogramBookmark(
+            messageId: MessageId(peerId: PeerId(100), namespace: Namespaces.Message.Cloud, id: 42),
+            note: "Edited note",
+            tags: ["work", MonogramBookmark.localPinTag, "important"] + [MonogramBookmark.localPinTag],
+            createdAt: 1,
+            updatedAt: 2
+        )
+        XCTAssertTrue(bookmark.isLocallyPinned)
+        XCTAssertEqual(Set(bookmark.tags), Set(["work", "important", MonogramBookmark.localPinTag]))
+        XCTAssertEqual(bookmark.tags.count, 3)
+    }
+
     func testOfflineEntryConsentIsIndependentAndResetsForNextSession() {
         let peerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(987))
         let otherPeerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(988))

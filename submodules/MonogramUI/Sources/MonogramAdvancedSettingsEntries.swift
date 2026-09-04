@@ -48,26 +48,17 @@ struct MonogramAdvancedSettingsEntry: ItemListNodeEntry {
     }
 
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
-        let arguments = arguments as! MonogramAdvancedSettingsControllerArguments
+        let actions = arguments as! MonogramAdvancedSettingsActions
         switch self.content {
         case let .header(text):
             return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
         case let .toggle(id, title, value):
             return ItemListSwitchItem(presentationData: presentationData, systemStyle: .glass, title: title, value: value, maximumNumberOfLines: 2, sectionId: self.section, style: .blocks, updated: { value in
-                arguments.update(id, value)
+                actions.update(id, value)
             })
         case let .navigation(title, label, action):
             return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: title, label: label, sectionId: self.section, style: .blocks, action: {
-                switch action {
-                case .ghostDuration:
-                    arguments.configureGhostDuration()
-                case .bookmarks:
-                    arguments.openBookmarks()
-                case .annotations:
-                    arguments.openAnnotations()
-                case .clearDeleted:
-                    arguments.clearDeleted()
-                }
+                actions.open(action)
             })
         case let .footer(text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
@@ -108,14 +99,9 @@ private func monogramFeatureTitle(id: MonogramFeatureId, strings: PresentationSt
 
 func monogramAdvancedSettingsEntries(
     presentationData: PresentationData,
-    accountSettings: MonogramSettings,
-    timestamp: Int64,
-    bookmarksCount: Int,
-    annotationsCount: Int,
-    deletedCount: Int
+    state: MonogramAdvancedSettingsState
 ) -> [MonogramAdvancedSettingsEntry] {
     var entries: [MonogramAdvancedSettingsEntry] = []
-    let ghostModeActive = accountSettings.isGhostModeActive(at: timestamp)
 
     func append(_ section: MonogramSettingsSection, _ content: MonogramAdvancedSettingsEntry.Content) {
         entries.append(MonogramAdvancedSettingsEntry(section: section.rawValue, index: entries.count, content: content))
@@ -125,22 +111,15 @@ func monogramAdvancedSettingsEntries(
         append(section, .toggle(
             id: id,
             title: monogramFeatureTitle(id: id, strings: presentationData.strings),
-            value: id == .ghostMode ? ghostModeActive : accountSettings.isEnabled(id)
+            value: state.isEnabled(id)
         ))
     }
 
     append(.privacy, .header(text: "ПРИВАТНОСТЬ"))
     toggle(.privacy, .offlineEntry)
     toggle(.privacy, .ghostMode)
-    if ghostModeActive {
-        let durationLabel: String
-        if let expiresAt = accountSettings.ghostModeExpiresAt {
-            let remaining = max(0, expiresAt - timestamp)
-            durationLabel = remaining >= 3600 ? "\((remaining + 3599) / 3600) ч" : "\((remaining + 59) / 60) мин"
-        } else {
-            durationLabel = "Постоянно"
-        }
-        append(.privacy, .navigation(title: "Продолжительность", label: durationLabel, action: .ghostDuration))
+    if state.ghostMode.isActive {
+        append(.privacy, .navigation(title: "Продолжительность", label: state.ghostMode.durationLabel, action: .ghostDuration))
         toggle(.privacy, .ghostReadReceipts)
         toggle(.privacy, .ghostTypingActivity)
     }
@@ -148,17 +127,17 @@ func monogramAdvancedSettingsEntries(
 
     append(.localData, .header(text: "ЛОКАЛЬНЫЕ ДАННЫЕ"))
     toggle(.localData, .preserveDeletedMessages)
-    if deletedCount > 0 {
-        append(.localData, .navigation(title: "Очистить сохранённые сообщения", label: "\(deletedCount)", action: .clearDeleted))
+    if state.deletedCount > 0 {
+        append(.localData, .navigation(title: "Очистить сохранённые сообщения", label: "\(state.deletedCount)", action: .clearDeleted))
     }
     toggle(.localData, .preserveEditHistory)
     toggle(.localData, .localMessagePins)
-    if accountSettings.isEnabled(.localMessagePins) {
-        append(.localData, .navigation(title: "Локальные закрепления", label: "\(bookmarksCount)", action: .bookmarks))
+    if state.isEnabled(.localMessagePins) {
+        append(.localData, .navigation(title: "Локальные закрепления", label: "\(state.bookmarksCount)", action: .bookmarks))
     }
     toggle(.localData, .localNotes)
-    if accountSettings.isEnabled(.localNotes) {
-        append(.localData, .navigation(title: "Управление заметками", label: "\(annotationsCount)", action: .annotations))
+    if state.isEnabled(.localNotes) {
+        append(.localData, .navigation(title: "Управление заметками", label: "\(state.annotationsCount)", action: .annotations))
     }
     append(.localData, .footer(text: "Удалённые сообщения остаются на прежнем месте с пометкой. Повторное локальное удаление убирает сохранённую копию. Секретные, исчезающие и защищённые сообщения не сохраняются."))
 

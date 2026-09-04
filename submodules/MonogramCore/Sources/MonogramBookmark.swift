@@ -2,12 +2,18 @@ import Foundation
 import Postbox
 
 public struct MonogramBookmark: Codable, Equatable {
+    public static let localPinTag = "monogram-pin"
+
     public let id: UUID
     public let messageId: MessageId
     public let note: String?
     public let tags: [String]
     public let createdAt: Int64
     public let updatedAt: Int64
+
+    public var isLocallyPinned: Bool {
+        return self.tags.contains(Self.localPinTag)
+    }
 
     private enum CodingKeys: String, CodingKey {
         case id, messageId, note, tags, createdAt, updatedAt

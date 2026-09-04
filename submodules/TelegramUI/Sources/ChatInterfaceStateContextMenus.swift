@@ -2048,8 +2048,8 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             })))
         }
         if monogramData.areLocalPinsEnabled && messages.count == 1 && MonogramLocalDataPolicy.bookmarkDenialReason(messageId: message.id, isCopyProtected: isCopyProtected, isEphemeral: isMonogramBookmarkEphemeral) == nil {
-            let pinTag = "monogram-pin"
-            let isLocallyPinned = monogramData.bookmark?.tags.contains(pinTag) == true
+            let pinTag = MonogramBookmark.localPinTag
+            let isLocallyPinned = monogramData.bookmark?.isLocallyPinned == true
             actions.append(.action(ContextMenuActionItem(text: isLocallyPinned ? "Открепить локально" : "Закрепить локально", icon: { theme in
                 return generateTintedImage(image: UIImage(bundleImageName: isLocallyPinned ? "Chat/Context Menu/Unpin" : "Chat/Context Menu/Pin"), color: theme.actionSheet.primaryTextColor)
             }, action: { _, f in
