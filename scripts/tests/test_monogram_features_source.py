@@ -84,7 +84,17 @@ class MonogramFeaturesSourceTests(unittest.TestCase):
     def test_temporary_account_context_does_not_uninstall_preservation(self):
         source = self.source("submodules/TelegramUI/Sources/AccountContext.swift")
         self.assertRegex(source, r"if !temp \{\s+(?://[^\n]*\n\s*)*self.monogramSettingsDisposable =")
-        self.assertRegex(source, r"if let monogramSettingsDisposable = self.monogramSettingsDisposable \{\s+monogramSettingsDisposable.dispose\(\)\s+self.account.postbox.setMessageDeletionTransform\(nil\)")
+        self.assertNotIn("setMessageDeletionTransform", source)
+        self.assertNotIn("setMessageUpdateObserver", source)
+
+    def test_app_and_notification_sync_install_preservation_before_processing(self):
+        manager = self.source("submodules/TelegramCore/Sources/State/AccountStateManager.swift")
+        self.assertLess(manager.index("auxiliaryMethods.configurePostbox(postbox, accountPeerId)"), manager.index("self.impl = QueueLocalObject"))
+        for path in (
+            "submodules/TelegramUI/Components/TelegramAccountAuxiliaryMethods/Sources/TelegramAccountAuxiliaryMethods.swift",
+            "Telegram/NotificationService/Sources/NotificationService.swift",
+        ):
+            self.assertIn("configurePostbox: setupMonogramMessagePreservation", self.source(path))
 
     def test_preserved_message_ids_are_positive_and_history_uses_navigation(self):
         source = self.source("submodules/MonogramCore/Sources/MonogramDeletedMessageTransform.swift")

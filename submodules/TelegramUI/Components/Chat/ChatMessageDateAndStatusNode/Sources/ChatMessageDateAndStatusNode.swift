@@ -538,10 +538,12 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             }
             
             var updatedDateText = arguments.dateText
+            var showsEditedIcon = false
             if arguments.edited {
                 if let useEditedTimestamp = arguments.context.getAppConfigValue("message_primary_edited_date") as? Bool, useEditedTimestamp {
                 } else {
-                    updatedDateText = "\(arguments.presentationData.strings.Conversation_MessageEditedLabel) \(updatedDateText)"
+                    showsEditedIcon = true
+                    updatedDateText = "\u{2003} \(updatedDateText)"
                 }
             }
             if let impressionCount = arguments.impressionCount {
@@ -549,7 +551,12 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             }
             
             let dateFont = Font.regular(floor(arguments.presentationData.fontSize.baseDisplaySize * 11.0 / 17.0))
-            let (date, dateApply) = dateLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: updatedDateText, font: dateFont, textColor: dateColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .middle, constrainedSize: arguments.constrainedSize, alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
+            let attributedDateText = NSMutableAttributedString(string: updatedDateText, font: dateFont, textColor: dateColor)
+            if showsEditedIcon, let range = updatedDateText.range(of: "\u{2003}"), let editedImage = generateScaledImage(image: UIImage(systemName: "pencil"), size: CGSize(width: dateFont.pointSize, height: dateFont.pointSize), opaque: false) {
+                // An em space reserves the icon's width while keeping it inline with the time.
+                attributedDateText.addAttribute(.attachment, value: editedImage, range: NSRange(range, in: updatedDateText))
+            }
+            let (date, dateApply) = dateLayout(TextNodeLayoutArguments(attributedString: attributedDateText, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .middle, constrainedSize: arguments.constrainedSize, alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
             
             let checkOffset = floor(arguments.presentationData.fontSize.baseDisplaySize * 6.0 / 17.0)
             

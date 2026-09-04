@@ -151,6 +151,9 @@ public final class SharedWakeupManager {
                 return
             }
             strongSelf.inForeground = value
+            if !value {
+                MonogramOfflineEntry.resetSession()
+            }
             if value {
                 strongSelf.activeExplicitExtensionTimer?.invalidate()
                 strongSelf.activeExplicitExtensionTimer = nil
@@ -258,10 +261,11 @@ public final class SharedWakeupManager {
                 |> distinctUntilChanged
                 
                 let userInterfaceInUse = accountUserInterfaceInUse(account.id)
-                let suppressOnlinePresence = monogramAccountSettings(postbox: account.postbox)
-                |> mapToSignal { settings -> Signal<Bool, NoError> in
+                let suppressOnlinePresence = combineLatest(monogramAccountSettings(postbox: account.postbox), MonogramOfflineEntry.signal)
+                |> mapToSignal { settings, _ -> Signal<Bool, NoError> in
+                    let offlineEntry = MonogramOfflineEntry.isActive(accountPeerId: account.peerId, settings: settings)
                     guard settings.isGhostModeActive() else {
-                        return .single(false)
+                        return .single(offlineEntry)
                     }
                     if let expiresAt = settings.ghostModeExpiresAt {
                         let remaining = expiresAt - Int64(Date().timeIntervalSince1970)
@@ -269,7 +273,11 @@ public final class SharedWakeupManager {
                             return .single(false)
                         }
                         return .single(true)
-                        |> then(.single(false) |> delay(Double(remaining), queue: .mainQueue()))
+                        |> then(Signal<Bool, NoError> { subscriber in
+                            subscriber.putNext(MonogramOfflineEntry.isActive(accountPeerId: account.peerId, settings: settings))
+                            subscriber.putCompletion()
+                            return EmptyDisposable
+                        } |> delay(Double(remaining), queue: .mainQueue()))
                     }
                     return .single(true)
                 }

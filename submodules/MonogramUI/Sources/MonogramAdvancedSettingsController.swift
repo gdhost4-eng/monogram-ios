@@ -120,8 +120,8 @@ public func monogramAdvancedSettingsController(context: AccountContext) -> ViewC
             return monogramSettingsRefreshTimestamp(settings: settings)
             |> map { (settings, $0) }
         },
-        monogramBookmarks(postbox: context.account.postbox) |> map { $0.count } |> distinctUntilChanged,
-        monogramPeerAnnotations(postbox: context.account.postbox) |> map { $0.count } |> distinctUntilChanged,
+        monogramBookmarks(postbox: context.account.postbox) |> map { $0.filter { $0.tags.contains("monogram-pin") }.count } |> distinctUntilChanged,
+        monogramPeerAnnotations(postbox: context.account.postbox) |> map { $0.filter { $0.note != nil }.count } |> distinctUntilChanged,
         MonogramDeletedMessageTransform.records(postbox: context.account.postbox) |> map { $0.count } |> distinctUntilChanged
     )
     |> deliverOnMainQueue

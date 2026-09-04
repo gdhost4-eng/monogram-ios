@@ -904,12 +904,14 @@ public enum AccountNetworkState: Equatable {
 }
 
 public final class AccountAuxiliaryMethods {
+    public let configurePostbox: (Postbox, PeerId) -> Void
     public let fetchResource: (Postbox, MediaResource, Signal<[(Range<Int64>, MediaBoxFetchPriority)], NoError>, MediaResourceFetchParameters?) -> Signal<MediaResourceDataFetchResult, MediaResourceDataFetchError>?
     public let fetchResourceMediaReferenceHash: (MediaResource) -> Signal<Data?, NoError>
     public let prepareSecretThumbnailData: (MediaResourceData) -> (PixelDimensions, Data)?
     public let backgroundUpload: (Postbox, Network, MediaResource) -> Signal<String?, NoError>
     
-    public init(fetchResource: @escaping (Postbox, MediaResource, Signal<[(Range<Int64>, MediaBoxFetchPriority)], NoError>, MediaResourceFetchParameters?) -> Signal<MediaResourceDataFetchResult, MediaResourceDataFetchError>?, fetchResourceMediaReferenceHash: @escaping (MediaResource) -> Signal<Data?, NoError>, prepareSecretThumbnailData: @escaping (MediaResourceData) -> (PixelDimensions, Data)?, backgroundUpload: @escaping (Postbox, Network, MediaResource) -> Signal<String?, NoError>) {
+    public init(configurePostbox: @escaping (Postbox, PeerId) -> Void = { _, _ in }, fetchResource: @escaping (Postbox, MediaResource, Signal<[(Range<Int64>, MediaBoxFetchPriority)], NoError>, MediaResourceFetchParameters?) -> Signal<MediaResourceDataFetchResult, MediaResourceDataFetchError>?, fetchResourceMediaReferenceHash: @escaping (MediaResource) -> Signal<Data?, NoError>, prepareSecretThumbnailData: @escaping (MediaResourceData) -> (PixelDimensions, Data)?, backgroundUpload: @escaping (Postbox, Network, MediaResource) -> Signal<String?, NoError>) {
+        self.configurePostbox = configurePostbox
         self.fetchResource = fetchResource
         self.fetchResourceMediaReferenceHash = fetchResourceMediaReferenceHash
         self.prepareSecretThumbnailData = prepareSecretThumbnailData

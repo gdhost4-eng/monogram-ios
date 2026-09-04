@@ -8987,7 +8987,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
         return .single(false)
     }
     
-    func sendMessages(_ messages: [EnqueueMessage], media: Bool = false, postpone: Bool = false, commit: Bool = false, monogramAccountConfirmed: Bool = false) {
+    func sendMessages(_ messages: [EnqueueMessage], media: Bool = false, postpone: Bool = false, commit: Bool = false) {
         if case let .customChatContents(customChatContents) = self.subject {
             customChatContents.enqueueMessages(messages: messages)
             return
@@ -8997,28 +8997,6 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             return
         }
 
-        if !monogramAccountConfirmed && MonogramRuntimePolicy.isEnabled(.confirmAccountBeforeSending, accountPeerId: self.context.account.peerId) {
-            let _ = (self.context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: self.context.account.peerId))
-            |> deliverOnMainQueue).startStandalone(next: { [weak self] accountPeer in
-                guard let self else {
-                    return
-                }
-                let accountTitle = accountPeer?.displayTitle(strings: self.presentationData.strings, displayOrder: self.presentationData.nameDisplayOrder) ?? "ID \(self.context.account.peerId.toInt64())"
-                self.present(textAlertController(
-                    context: self.context,
-                    title: "Отправить с аккаунта «\(accountTitle)»?",
-                    text: "Проверьте активный аккаунт перед отправкой сообщения.",
-                    actions: [
-                        TextAlertAction(type: .defaultAction, title: "Отправить", action: { [weak self] in
-                            self?.sendMessages(messages, media: media, postpone: postpone, commit: commit, monogramAccountConfirmed: true)
-                        }),
-                        TextAlertAction(type: .genericAction, title: self.presentationData.strings.Common_Cancel, action: {})
-                    ]
-                ), in: .window(.root))
-            })
-            return
-        }
-        
         let _ = (self.shouldDivertMessagesToScheduled(messages: messages)
         |> deliverOnMainQueue).startStandalone(next: { [weak self] shouldDivert in
             guard let self else {
@@ -9071,7 +9049,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
             } else {
                 self.presentScheduleTimePicker(style: media ? .media : .default, dismissByTapOutside: false, completion: { [weak self] result in
                     if let strongSelf = self {
-                        strongSelf.sendMessages(strongSelf.transformEnqueueMessages(messages, silentPosting: result.silentPosting, scheduleTime: result.time, repeatPeriod: result.repeatPeriod, postpone: postpone), commit: true, monogramAccountConfirmed: true)
+                        strongSelf.sendMessages(strongSelf.transformEnqueueMessages(messages, silentPosting: result.silentPosting, scheduleTime: result.time, repeatPeriod: result.repeatPeriod, postpone: postpone), commit: true)
                     }
                 })
             }

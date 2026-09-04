@@ -2107,6 +2107,9 @@ public final class AccountStateManager {
         peerInputActivityManager: PeerInputActivityManager?,
         auxiliaryMethods: AccountAuxiliaryMethods
     ) {
+        // Install storage hooks before either the app or the notification
+        // extension can start applying updates to this Postbox.
+        auxiliaryMethods.configurePostbox(postbox, accountPeerId)
         let queue = Queue(name: "AccountStateManager")
         
         self.accountPeerId = accountPeerId

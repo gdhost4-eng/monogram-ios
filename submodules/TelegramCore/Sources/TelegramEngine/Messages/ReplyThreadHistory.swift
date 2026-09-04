@@ -314,7 +314,7 @@ private class ReplyThreadHistoryContextImpl {
         }
     }
     
-    func applyMaxReadIndex(messageIndex: MessageIndex) {
+    func applyMaxReadIndex(messageIndex: MessageIndex, locally: Bool = false) {
         let peerId = self.peerId
         let threadId = self.threadId
         
@@ -376,6 +376,9 @@ private class ReplyThreadHistoryContextImpl {
                         }
                     }
                     
+                    if locally {
+                        data.isMarkedUnread = false
+                    }
                     data.maxKnownMessageId = max(data.maxKnownMessageId, messageIndex.id.id)
                     
                     if let entry = StoredMessageHistoryThreadInfo(data) {
@@ -385,7 +388,7 @@ private class ReplyThreadHistoryContextImpl {
             }
             
             if markMainAsRead {
-                _internal_applyMaxReadIndexInteractively(transaction: transaction, stateManager: account.stateManager, index: messageIndex)
+                _internal_applyMaxReadIndexInteractively(transaction: transaction, stateManager: account.stateManager, index: messageIndex, locally: locally)
             }
             
             var subPeerId: Api.InputPeer?
@@ -474,6 +477,11 @@ private class ReplyThreadHistoryContextImpl {
                         revalidate = true
                     }
                 }
+            }
+
+            if locally {
+                account.stateManager.notifyAppliedIncomingReadMessages([messageIndex.id])
+                return
             }
 
             if let subPeerId {
@@ -595,9 +603,9 @@ public class ReplyThreadHistoryContext {
         })
     }
     
-    public func applyMaxReadIndex(messageIndex: MessageIndex) {
+    public func applyMaxReadIndex(messageIndex: MessageIndex, locally: Bool = false) {
         self.impl.with { impl in
-            impl.applyMaxReadIndex(messageIndex: messageIndex)
+            impl.applyMaxReadIndex(messageIndex: messageIndex, locally: locally)
         }
     }
 }

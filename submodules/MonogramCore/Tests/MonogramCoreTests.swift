@@ -5,6 +5,32 @@ import TelegramCore
 import MonogramCore
 
 final class MonogramCoreTests: XCTestCase {
+    func testOfflineEntryConsentIsIndependentAndResetsForNextSession() {
+        let peerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(987))
+        let otherPeerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(988))
+        MonogramOfflineEntry.resetSession()
+        defer { MonogramOfflineEntry.resetSession() }
+        var settings = MonogramSettings()
+        XCTAssertFalse(MonogramOfflineEntry.isActive(accountPeerId: peerId, settings: settings))
+        settings.setEnabled(true, for: .offlineEntry)
+        XCTAssertTrue(MonogramOfflineEntry.isActive(accountPeerId: peerId, settings: settings))
+        MonogramOfflineEntry.goOnline(accountPeerId: peerId)
+        XCTAssertFalse(MonogramOfflineEntry.isActive(accountPeerId: peerId, settings: settings))
+        XCTAssertTrue(MonogramOfflineEntry.isActive(accountPeerId: otherPeerId, settings: settings))
+        MonogramOfflineEntry.resetSession()
+        XCTAssertTrue(MonogramOfflineEntry.isActive(accountPeerId: peerId, settings: settings))
+        settings.setEnabled(true, for: .ghostMode)
+        XCTAssertFalse(MonogramOfflineEntry.isActive(accountPeerId: peerId, settings: settings))
+        XCTAssertTrue(settings.isGhostModeActive())
+        settings.setEnabled(false, for: .ghostMode)
+        XCTAssertFalse(MonogramOfflineEntry.isActive(accountPeerId: peerId, settings: settings))
+        MonogramOfflineEntry.resetSession()
+        XCTAssertTrue(MonogramOfflineEntry.isActive(accountPeerId: peerId, settings: settings))
+        settings.setEnabled(false, for: .offlineEntry)
+        MonogramOfflineEntry.resetSession()
+        XCTAssertFalse(MonogramOfflineEntry.isActive(accountPeerId: peerId, settings: settings))
+    }
+
     func testBookmarkRoundTripsThroughPostboxIncludingUUID() throws {
         let peerId = PeerId(namespace: Namespaces.Peer.CloudUser, id: PeerId.Id._internalFromInt64Value(123))
         for tags in [[], ["tag"]] as [[String]] {
@@ -37,20 +63,20 @@ final class MonogramCoreTests: XCTestCase {
     func testDefaultsComeFromRegistry() {
         let settings = MonogramSettings()
         XCTAssertTrue(settings.isEnabled(.advancedSettings))
-        XCTAssertFalse(settings.isEnabled(.localBookmarks))
+        XCTAssertFalse(settings.isEnabled(.localNotes))
         XCTAssertFalse(settings.isEnabled(.ghostMode))
     }
 
     func testRegularAndExperimentalOverridesRoundTrip() throws {
         var settings = MonogramSettings()
-        settings.setEnabled(true, for: .localBookmarks)
+        settings.setEnabled(true, for: .localNotes)
         settings.setEnabled(true, for: .preserveDeletedMessages)
 
         let data = try JSONEncoder().encode(settings)
         let decoded = try JSONDecoder().decode(MonogramSettings.self, from: data)
 
         XCTAssertEqual(decoded, settings)
-        XCTAssertTrue(decoded.isEnabled(.localBookmarks))
+        XCTAssertTrue(decoded.isEnabled(.localNotes))
         XCTAssertTrue(decoded.isEnabled(.preserveDeletedMessages))
     }
 
@@ -151,7 +177,7 @@ final class MonogramCoreTests: XCTestCase {
         var settings = MonogramSettings(ghostModeExcludedPeerIds: [100, 200])
         settings.setEnabled(false, for: .ghostReadReceipts)
         settings.setGhostModeDuration(900, at: 100)
-        settings.setEnabled(true, for: .localBookmarks)
+        settings.setEnabled(true, for: .localNotes)
         XCTAssertEqual(settings.ghostModeExpiresAt, 1000)
         settings.setGhostModeDuration(nil, at: 2000)
         XCTAssertNil(settings.ghostModeExpiresAt)

@@ -319,8 +319,7 @@ public final class AccountContextImpl: AccountContext {
         self.account.stateManager.tonContext = self.starsContext
 
         if !temp {
-            // Temporary contexts share the same Postbox and must not own or
-            // tear down the account-wide preservation hooks.
+            // Temporary contexts share the account's runtime settings.
             self.monogramSettingsDisposable = (monogramAccountSettings(postbox: account.postbox)
             |> deliverOnMainQueue).startStrict(next: { [weak account] settings in
                 guard let account else {
@@ -328,18 +327,6 @@ public final class AccountContextImpl: AccountContext {
                 }
                 MonogramRuntimePolicy.update(accountPeerId: account.peerId, settings: settings)
             })
-            account.postbox.setMessageDeletionTransform { [weak account] messages, transaction in
-                guard let account else {
-                    return [:]
-                }
-                return MonogramDeletedMessageTransform.transform(messages: messages, transaction: transaction, accountPeerId: account.peerId, mediaBox: account.postbox.mediaBox)
-            }
-            account.postbox.setMessageUpdateObserver { [weak account] updates, transaction in
-                guard let account else {
-                    return
-                }
-                captureMonogramMessageEdits(transaction: transaction, updates: updates, accountPeerId: account.peerId)
-            }
         }
                 
         self.cachedGroupCallContexts = AccountGroupCallContextCacheImpl()
@@ -539,8 +526,6 @@ public final class AccountContextImpl: AccountContext {
         self.experimentalUISettingsDisposable?.dispose()
         if let monogramSettingsDisposable = self.monogramSettingsDisposable {
             monogramSettingsDisposable.dispose()
-            self.account.postbox.setMessageDeletionTransform(nil)
-            self.account.postbox.setMessageUpdateObserver(nil)
             MonogramRuntimePolicy.remove(accountPeerId: self.account.peerId)
         }
         self.animatedEmojiStickersDisposable?.dispose()
@@ -637,15 +622,16 @@ public final class AccountContextImpl: AccountContext {
     }
     
     public func applyMaxReadIndex(for location: ChatLocation, contextHolder: Atomic<ChatLocationContextHolder?>, messageIndex: MessageIndex) {
-        if MonogramRuntimePolicy.suppressesReadReceipts(accountPeerId: self.account.peerId, peerId: location.peerId) {
+        let locally = MonogramRuntimePolicy.suppressesReadReceipts(accountPeerId: self.account.peerId, peerId: location.peerId)
+        if locally && !MonogramRuntimePolicy.readsHistoryLocally(accountPeerId: self.account.peerId, peerId: location.peerId) {
             return
         }
         switch location {
         case .peer:
-            let _ = self.engine.messages.applyMaxReadIndexInteractively(index: messageIndex).start()
+            let _ = self.engine.messages.applyMaxReadIndexInteractively(index: messageIndex, locally: locally).start()
         case let .replyThread(data):
             let context = chatLocationContext(holder: contextHolder, account: self.account, data: data)
-            context.applyMaxReadIndex(messageIndex: messageIndex)
+            context.applyMaxReadIndex(messageIndex: messageIndex, locally: locally)
         case .customChatContents:
             break
         }

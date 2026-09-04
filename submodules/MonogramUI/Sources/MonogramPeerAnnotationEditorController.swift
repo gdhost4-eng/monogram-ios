@@ -12,17 +12,14 @@ import MonogramCore
 
 private struct MonogramPeerAnnotationEditorState: Equatable {
     var note: String
-    var tags: String
 }
 
 private final class MonogramPeerAnnotationEditorArguments {
     let updateNote: (String) -> Void
-    let updateTags: (String) -> Void
     let deleteAnnotation: () -> Void
 
-    init(updateNote: @escaping (String) -> Void, updateTags: @escaping (String) -> Void, deleteAnnotation: @escaping () -> Void) {
+    init(updateNote: @escaping (String) -> Void, deleteAnnotation: @escaping () -> Void) {
         self.updateNote = updateNote
-        self.updateTags = updateTags
         self.deleteAnnotation = deleteAnnotation
     }
 }
@@ -30,8 +27,6 @@ private final class MonogramPeerAnnotationEditorArguments {
 private enum MonogramPeerAnnotationEditorEntry: ItemListNodeEntry {
     case noteHeader(String)
     case note(String, String)
-    case tagsHeader(String)
-    case tags(String, String)
     case privacyInfo(String)
     case delete(String)
 
@@ -39,8 +34,6 @@ private enum MonogramPeerAnnotationEditorEntry: ItemListNodeEntry {
         switch self {
         case .noteHeader, .note:
             return 0
-        case .tagsHeader, .tags:
-            return 1
         case .privacyInfo:
             return 2
         case .delete:
@@ -54,10 +47,6 @@ private enum MonogramPeerAnnotationEditorEntry: ItemListNodeEntry {
             return 0
         case .note:
             return 1
-        case .tagsHeader:
-            return 2
-        case .tags:
-            return 3
         case .privacyInfo:
             return 4
         case .delete:
@@ -72,7 +61,7 @@ private enum MonogramPeerAnnotationEditorEntry: ItemListNodeEntry {
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! MonogramPeerAnnotationEditorArguments
         switch self {
-        case let .noteHeader(text), let .tagsHeader(text):
+        case let .noteHeader(text):
             return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
         case let .note(text, placeholder):
             return ItemListMultilineInputItem(
@@ -87,21 +76,6 @@ private enum MonogramPeerAnnotationEditorEntry: ItemListNodeEntry {
                 autocorrection: true,
                 textUpdated: arguments.updateNote
             )
-        case let .tags(text, placeholder):
-            return ItemListSingleLineInputItem(
-                presentationData: presentationData,
-                systemStyle: .glass,
-                title: NSAttributedString(),
-                text: text,
-                placeholder: placeholder,
-                type: .regular(capitalization: false, autocorrection: false),
-                returnKeyType: .done,
-                clearType: .onFocus,
-                maxLength: 512,
-                sectionId: self.section,
-                textUpdated: arguments.updateTags,
-                action: {}
-            )
         case let .privacyInfo(text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         case let .delete(text):
@@ -113,22 +87,14 @@ private enum MonogramPeerAnnotationEditorEntry: ItemListNodeEntry {
 private func monogramPeerAnnotationEditorEntries(
     presentationData: PresentationData,
     state: MonogramPeerAnnotationEditorState,
-    allowsNote: Bool,
-    allowsTags: Bool,
     canDelete: Bool
 ) -> [MonogramPeerAnnotationEditorEntry] {
     var entries: [MonogramPeerAnnotationEditorEntry] = []
-    if allowsNote {
-        entries.append(.noteHeader(presentationData.strings.Monogram_PeerAnnotation_NoteHeader))
-        entries.append(.note(state.note, presentationData.strings.Monogram_PeerAnnotation_NotePlaceholder))
-    }
-    if allowsTags {
-        entries.append(.tagsHeader(presentationData.strings.Monogram_PeerAnnotation_TagsHeader))
-        entries.append(.tags(state.tags, presentationData.strings.Monogram_PeerAnnotation_TagsPlaceholder))
-    }
-    entries.append(.privacyInfo(presentationData.strings.Monogram_PeerAnnotation_PrivacyInfo))
+    entries.append(.noteHeader("ЗАМЕТКА"))
+    entries.append(.note(state.note, "Добавить заметку"))
+    entries.append(.privacyInfo("Заметка хранится только на этом устройстве и видна только вам."))
     if canDelete {
-        entries.append(.delete(presentationData.strings.Monogram_PeerAnnotation_Delete))
+        entries.append(.delete("Удалить заметку"))
     }
     return entries
 }
@@ -136,13 +102,10 @@ private func monogramPeerAnnotationEditorEntries(
 public func monogramPeerAnnotationEditorController(
     context: AccountContext,
     peerId: PeerId,
-    annotation: MonogramPeerAnnotation?,
-    allowsNote: Bool,
-    allowsTags: Bool
+    annotation: MonogramPeerAnnotation?
 ) -> ViewController {
     let initialState = MonogramPeerAnnotationEditorState(
-        note: annotation?.note ?? "",
-        tags: annotation?.tags.map { "#\($0)" }.joined(separator: " ") ?? ""
+        note: annotation?.note ?? ""
     )
     let stateValue = Atomic(value: initialState)
     let statePromise = ValuePromise(initialState, ignoreRepeated: true)
@@ -158,12 +121,6 @@ public func monogramPeerAnnotationEditorController(
             state.note = value
             return state
         }
-    }, updateTags: { value in
-        updateState { state in
-            var state = state
-            state.tags = value
-            return state
-        }
     }, deleteAnnotation: {
         deleteAnnotationImpl?()
     })
@@ -173,9 +130,9 @@ public func monogramPeerAnnotationEditorController(
     |> map { presentationData, state -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let presentationData = presentationData.withUpdated(theme: presentationData.theme.withModalBlocksBackground())
 
-        let rightNavigationButton = ItemListNavigationButton(content: .icon(.done), style: .bold, enabled: allowsNote || allowsTags, action: {
-            let note = allowsNote ? state.note : annotation?.note
-            let tags = allowsTags ? MonogramTag.parse(state.tags) : annotation?.tags ?? []
+        let rightNavigationButton = ItemListNavigationButton(content: .icon(.done), style: .bold, enabled: true, action: {
+            let note = state.note
+            let tags: [String] = []
             let _ = (setMonogramPeerAnnotation(postbox: context.account.postbox, peerId: peerId, note: note, tags: tags)
             |> deliverOnMainQueue).start(completed: {
                 dismissImpl?()
@@ -183,14 +140,14 @@ public func monogramPeerAnnotationEditorController(
         })
         let controllerState = ItemListControllerState(
             presentationData: ItemListPresentationData(presentationData),
-            title: .text(presentationData.strings.Monogram_PeerAnnotation_Title),
+            title: .text("Локальная заметка"),
             leftNavigationButton: nil,
             rightNavigationButton: rightNavigationButton,
             backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back)
         )
         let listState = ItemListNodeState(
             presentationData: ItemListPresentationData(presentationData),
-            entries: monogramPeerAnnotationEditorEntries(presentationData: presentationData, state: state, allowsNote: allowsNote, allowsTags: allowsTags, canDelete: annotation != nil),
+            entries: monogramPeerAnnotationEditorEntries(presentationData: presentationData, state: state, canDelete: annotation != nil),
             style: .blocks,
             animateChanges: false
         )
@@ -205,8 +162,8 @@ public func monogramPeerAnnotationEditorController(
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         controller?.present(textAlertController(
             context: context,
-            title: presentationData.strings.Monogram_PeerAnnotation_DeleteConfirmTitle,
-            text: presentationData.strings.Monogram_PeerAnnotation_DeleteConfirmText,
+            title: "Удалить заметку?",
+            text: "Локальная заметка будет удалена с этого устройства.",
             actions: [
                 TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
                 TextAlertAction(type: .destructiveAction, title: presentationData.strings.Common_Delete, action: {

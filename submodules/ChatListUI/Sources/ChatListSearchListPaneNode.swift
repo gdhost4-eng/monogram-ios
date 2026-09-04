@@ -1,4 +1,5 @@
 import Foundation
+import MonogramCore
 import UIKit
 import AsyncDisplayKit
 import Display
@@ -2259,17 +2260,18 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                     foundLocalPeers = .single(([], [:], Set()))
                 }
             } else if let query = query, (key == .chats || key == .topics) {
-                if query.hasPrefix("#") {
-                    foundLocalPeers = .single(([], [:], Set()))
-                } else if let communityId {
+                if let communityId {
                     let queryTokens = stringIndexTokens(query.lowercased(), transliteration: .combined)
-                    foundLocalPeers = context.engine.data.subscribe(
-                        TelegramEngine.EngineData.Item.Peer.CachedData(id: communityId)
+                    foundLocalPeers = combineLatest(
+                        context.engine.data.subscribe(TelegramEngine.EngineData.Item.Peer.CachedData(id: communityId)),
+                        monogramAccountSettings(postbox: context.account.postbox),
+                        searchMonogramPeerAnnotations(postbox: context.account.postbox, query: query)
                     )
-                    |> mapToSignal { cachedData -> Signal<(peers: [EngineRenderedPeer], unread: [EnginePeer.Id: (Int32, Bool)], recentlySearchedPeerIds: Set<EnginePeer.Id>), NoError> in
+                    |> mapToSignal { cachedData, settings, annotations -> Signal<(peers: [EngineRenderedPeer], unread: [EnginePeer.Id: (Int32, Bool)], recentlySearchedPeerIds: Set<EnginePeer.Id>), NoError> in
                         guard let communityData = cachedData as? CachedCommunityData else {
                             return .single((peers: [], unread: [:], recentlySearchedPeerIds: Set()))
                         }
+                        let notePeerIds = Set(settings.isEnabled(.localNotes) ? annotations.map(\.peerId) : [])
                         let peerIds = communityData.linkedPeers.map(\.peerId)
                         if peerIds.isEmpty {
                             return .single((peers: [], unread: [:], recentlySearchedPeerIds: Set()))
@@ -2301,7 +2303,7 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                                 guard let maybePeer = peers[id], let peer = maybePeer else {
                                     continue
                                 }
-                                if !peer.indexName.matchesByTokens(queryTokens) {
+                                if !peer.indexName.matchesByTokens(queryTokens) && !notePeerIds.contains(id) {
                                     continue
                                 }
                                 if peersFilter.contains(.onlyWriteable) && peersFilter.contains(.excludeDisabled) && !canSendMessagesToPeer(peer) {
@@ -2387,7 +2389,16 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                     }
 
                     let updatedLocalPeers = predicate |> mapToSignal { predicate in
-                        return context.engine.contacts.searchLocalPeers(query: query.lowercased(), predicate: predicate)
+                        return combineLatest(
+                            monogramAccountSettings(postbox: context.account.postbox),
+                            searchMonogramPeerAnnotations(postbox: context.account.postbox, query: query)
+                        )
+                        |> mapToSignal { settings, annotations -> Signal<[EngineRenderedPeer], NoError> in
+                            let notePeerIds = settings.isEnabled(.localNotes) ? annotations.map(\.peerId) : []
+                            return context.account.postbox.transaction { transaction in
+                                transaction.searchPeers(query: query.lowercased(), predicate: predicate, additionalPeerIds: notePeerIds).map(EngineRenderedPeer.init)
+                            }
+                        }
                     }
                     |> mapToSignal { peers -> Signal<[EngineRenderedPeer], NoError> in
                         return context.engine.data.subscribe(

@@ -3,6 +3,7 @@ import UserNotifications
 import SwiftSignalKit
 import Postbox
 import TelegramCore
+import MonogramCore
 import BuildConfig
 import OpenSSLEncryptionProvider
 import TelegramUIPreferences
@@ -32,7 +33,7 @@ private func setupSharedLogger(rootPath: String, path: String) {
     }
 }
 
-private let accountAuxiliaryMethods = AccountAuxiliaryMethods(fetchResource: { account, resource, ranges, _ in
+private let accountAuxiliaryMethods = AccountAuxiliaryMethods(configurePostbox: setupMonogramMessagePreservation, fetchResource: { account, resource, ranges, _ in
     return nil
 }, fetchResourceMediaReferenceHash: { resource in
     return .single(nil)

@@ -1,4 +1,5 @@
 import Foundation
+import MonogramCore
 import UIKit
 import Postbox
 import SwiftSignalKit
@@ -93,6 +94,47 @@ private final class ContextControllerContentSourceImpl: ContextControllerContent
 }
 
 public class ChatListControllerImpl: TelegramBaseController, ChatListController {
+    private let offlineEntryDisposable = MetaDisposable()
+    private var offlineEntryOverlay: UIVisualEffectView?
+    private let offlineEntryButton = UIButton(type: .system)
+
+    private func updateOfflineEntryOverlay(active: Bool) {
+        if active {
+            if self.offlineEntryOverlay == nil {
+                let overlay = UIVisualEffectView(effect: UIBlurEffect(style: .regular))
+                self.offlineEntryButton.setTitle("Выйти в сеть", for: .normal)
+                self.offlineEntryButton.titleLabel?.font = UIFont.systemFont(ofSize: 17.0, weight: .semibold)
+                self.offlineEntryButton.setTitleColor(.white, for: .normal)
+                self.offlineEntryButton.backgroundColor = self.presentationData.theme.list.itemAccentColor
+                self.offlineEntryButton.layer.cornerRadius = 14.0
+                self.offlineEntryButton.addTarget(self, action: #selector(self.offlineEntryGoOnline), for: .touchUpInside)
+                overlay.contentView.addSubview(self.offlineEntryButton)
+                self.displayNode.view.addSubview(overlay)
+                self.offlineEntryOverlay = overlay
+                self.chatListDisplayNode.mainContainerNode.view.accessibilityElementsHidden = true
+            }
+            self.layoutOfflineEntryOverlay()
+        } else {
+            self.offlineEntryOverlay?.removeFromSuperview()
+            self.offlineEntryOverlay = nil
+            self.chatListDisplayNode.mainContainerNode.view.accessibilityElementsHidden = false
+        }
+    }
+
+    private func layoutOfflineEntryOverlay() {
+        guard let overlay = self.offlineEntryOverlay else { return }
+        let size = self.validLayout?.size ?? self.displayNode.bounds.size
+        let bottomInset = self.validLayout?.intrinsicInsets.bottom ?? 0.0
+        overlay.frame = CGRect(x: 0.0, y: 0.0, width: size.width, height: max(0.0, size.height - bottomInset))
+        let width = min(280.0, max(0.0, size.width - 48.0))
+        self.offlineEntryButton.frame = CGRect(x: (size.width - width) / 2.0, y: max(0.0, (overlay.bounds.height - 52.0) / 2.0), width: width, height: 52.0)
+        self.displayNode.view.bringSubviewToFront(overlay)
+    }
+
+    @objc private func offlineEntryGoOnline() {
+        MonogramOfflineEntry.goOnline(accountPeerId: self.context.account.peerId)
+    }
+
     private var validLayout: ContainerViewLayout?
     
     public let context: AccountContext
@@ -789,6 +831,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     }
     
     deinit {
+        self.offlineEntryDisposable.dispose()
         self.openMessageFromSearchDisposable.dispose()
         self.badgeDisposable?.dispose()
         self.badgeIconDisposable?.dispose()
@@ -1312,6 +1355,20 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
     override public func loadDisplayNode() {
         self.displayNode = ChatListControllerNode(context: self.context, location: self.location, previewing: self.previewing, controlsHistoryPreload: self.controlsHistoryPreload, presentationData: self.presentationData, animationCache: self.animationCache, animationRenderer: self.animationRenderer, controller: self)
         
+        let entrySettings = monogramAccountSettings(postbox: self.context.account.postbox)
+        |> mapToSignal { settings -> Signal<MonogramSettings, NoError> in
+            if settings.isGhostModeActive(), let expiresAt = settings.ghostModeExpiresAt {
+                return .single(settings)
+                |> then(.single(settings) |> delay(Double(max(0, expiresAt - Int64(Date().timeIntervalSince1970))), queue: .mainQueue()))
+            }
+            return .single(settings)
+        }
+        self.offlineEntryDisposable.set((combineLatest(entrySettings, MonogramOfflineEntry.signal)
+        |> deliverOnMainQueue).start(next: { [weak self] settings, _ in
+            guard let self else { return }
+            self.updateOfflineEntryOverlay(active: MonogramOfflineEntry.isActive(accountPeerId: self.context.account.peerId, settings: settings))
+        }))
+
         self.chatListDisplayNode.navigationBar = self.navigationBar
         
         self.chatListDisplayNode.requestDeactivateSearch = { [weak self] in
@@ -3541,6 +3598,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
         let navigationBarHeight: CGFloat = 0.0
         
         self.chatListDisplayNode.containerLayoutUpdated(layout, navigationBarHeight: navigationBarHeight, visualNavigationHeight: navigationBarHeight, cleanNavigationBarHeight: navigationBarHeight, storiesInset: 0.0, transition: transition)
+        self.layoutOfflineEntryOverlay()
     }
     
     override public func navigationStackConfigurationUpdated(next: [ViewController]) {

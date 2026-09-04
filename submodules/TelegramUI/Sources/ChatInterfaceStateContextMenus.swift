@@ -52,10 +52,10 @@ private struct MessageContextMenuData {
 }
 
 private struct MonogramMessageContextData {
-    let areBookmarksEnabled: Bool
     let areLocalPinsEnabled: Bool
     let showsPowerUserInformation: Bool
     let ghostModeEnabled: Bool
+    let preserveEditHistoryEnabled: Bool
     let bookmark: MonogramBookmark?
     let editHistory: MonogramEditHistory?
 }
@@ -95,12 +95,12 @@ private enum MonogramEditHistoryEntry: ItemListNodeEntry {
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         switch self {
         case let .revision(_, text):
-            return ItemListMultilineTextItem(presentationData: presentationData, text: text, enabledEntityTypes: [], sectionId: self.section, style: .blocks)
+            return ItemListMultilineTextItem(presentationData: presentationData, text: text, enabledEntityTypes: [], sectionId: self.section, style: .blocks, isTextSelectionEnabled: true)
         }
     }
 }
 
-private func monogramEditHistoryEntries(revisions: [MonogramMessageRevision], currentText: String, currentTimestamp: Int32) -> [MonogramEditHistoryEntry] {
+private func monogramEditHistoryEntries(revisions: [MonogramMessageRevision], currentText: String, currentTimestamp: Int32, preserveEditHistoryEnabled: Bool) -> [MonogramEditHistoryEntry] {
     let formatter = DateFormatter()
     formatter.locale = .current
     formatter.dateStyle = .medium
@@ -118,16 +118,19 @@ private func monogramEditHistoryEntries(revisions: [MonogramMessageRevision], cu
         return .revision(index: index, text: "\(title) · \(date)\n\(text)")
     }
     if revisions.isEmpty {
-        entries.append(.revision(index: entries.count, text: "Предыдущие версии не сохранены на этом устройстве. Включите сохранение истории изменений в настройках Monogram; оно действует на последующие правки полученных сообщений."))
+        let explanation = preserveEditHistoryEnabled
+            ? "Сохранение истории включено. Предыдущих версий этого сообщения на устройстве нет. История сохраняется, если прежняя версия была получена до правки."
+            : "Предыдущих версий этого сообщения на устройстве нет. Включите сохранение истории изменений в настройках Monogram для последующих правок."
+        entries.append(.revision(index: entries.count, text: explanation))
     }
     return entries
 }
 
-private func monogramEditHistoryController(context: AccountContext, revisions: [MonogramMessageRevision], currentText: String, currentTimestamp: Int32) -> ViewController {
+private func monogramEditHistoryController(context: AccountContext, revisions: [MonogramMessageRevision], currentText: String, currentTimestamp: Int32, preserveEditHistoryEnabled: Bool) -> ViewController {
     let state = context.sharedContext.presentationData
     |> deliverOnMainQueue
     |> map { presentationData -> (ItemListControllerState, (ItemListNodeState, Any)) in
-        let entries = monogramEditHistoryEntries(revisions: revisions, currentText: currentText, currentTimestamp: currentTimestamp)
+        let entries = monogramEditHistoryEntries(revisions: revisions, currentText: currentText, currentTimestamp: currentTimestamp, preserveEditHistoryEnabled: preserveEditHistoryEnabled)
         let controllerState = ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Изменения"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back))
         let listState = ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: false)
         return (controllerState, (listState, ()))
@@ -987,10 +990,10 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
     |> take(1)
     |> map { settings, bookmark, editHistory in
         return MonogramMessageContextData(
-            areBookmarksEnabled: settings.isEnabled(.localBookmarks),
             areLocalPinsEnabled: settings.isEnabled(.localMessagePins),
             showsPowerUserInformation: settings.isEnabled(.powerUserInformation),
             ghostModeEnabled: settings.isGhostModeActive(),
+            preserveEditHistoryEnabled: settings.isEnabled(.preserveEditHistory),
             bookmark: bookmark,
             editHistory: editHistory
         )
@@ -1723,7 +1726,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         
         if data.canEdit && !isPinnedMessages && !isMigrated {
             actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_MessageDialogEdit, icon: { theme in
-                return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.actionSheet.primaryTextColor)
+                return generateTintedImage(image: UIImage(systemName: "pencil", withConfiguration: UIImage.SymbolConfiguration(pointSize: 24.0, weight: .regular)), color: theme.actionSheet.primaryTextColor)
             }, action: { c, f in
                 if let _ = activeTodo {
                     interfaceInteraction.editTodoMessage(messages[0].id, nil, false)
@@ -1747,7 +1750,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
             if canSuggestPost {
                 if message.attributes.contains(where: { $0 is SuggestedPostMessageAttribute }) {
                     actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Chat_ContextMenu_SuggestedPost_EditMessage, icon: { theme in
-                        return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.actionSheet.primaryTextColor)
+                        return generateTintedImage(image: UIImage(systemName: "pencil", withConfiguration: UIImage.SymbolConfiguration(pointSize: 24.0, weight: .regular)), color: theme.actionSheet.primaryTextColor)
                     }, action: { c, _ in
                         c?.dismiss(completion: {
                             interfaceInteraction.openSuggestPost(message, .editMessage)
@@ -2044,27 +2047,6 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                 f(.default)
             })))
         }
-        if monogramData.areBookmarksEnabled && messages.count == 1 && MonogramLocalDataPolicy.bookmarkDenialReason(messageId: message.id, isCopyProtected: isCopyProtected, isEphemeral: isMonogramBookmarkEphemeral) == nil {
-            let isBookmarked = monogramData.bookmark != nil
-            actions.append(.action(ContextMenuActionItem(text: isBookmarked ? chatPresentationInterfaceState.strings.Monogram_Bookmark_Remove : chatPresentationInterfaceState.strings.Monogram_Bookmark_Add, icon: { theme in
-                return generateTintedImage(image: UIImage(bundleImageName: isBookmarked ? "Chat/Context Menu/Unfave" : "Chat/Context Menu/Fave"), color: theme.actionSheet.primaryTextColor)
-            }, action: { _, f in
-                if let bookmark = monogramData.bookmark {
-                    let _ = removeMonogramBookmark(postbox: context.account.postbox, id: bookmark.id).start()
-                } else {
-                    let _ = setMonogramBookmark(
-                        postbox: context.account.postbox,
-                        messageId: message.id,
-                        note: nil,
-                        tags: [],
-                        isCopyProtected: isCopyProtected,
-                        isEphemeral: isMonogramBookmarkEphemeral
-                    ).start()
-                }
-                f(.default)
-            })))
-        }
-
         if monogramData.areLocalPinsEnabled && messages.count == 1 && MonogramLocalDataPolicy.bookmarkDenialReason(messageId: message.id, isCopyProtected: isCopyProtected, isEphemeral: isMonogramBookmarkEphemeral) == nil {
             let pinTag = "monogram-pin"
             let isLocallyPinned = monogramData.bookmark?.tags.contains(pinTag) == true
@@ -2105,7 +2087,8 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                         context: context,
                         revisions: revisions,
                         currentText: message.text,
-                        currentTimestamp: currentTimestamp
+                        currentTimestamp: currentTimestamp,
+                        preserveEditHistoryEnabled: monogramData.preserveEditHistoryEnabled
                     ))
                 })
             })))
@@ -2568,7 +2551,7 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
                 if message.id.namespace == Namespaces.Message.QuickReplyCloud {
                     if data.canEdit {
                         actions.append(.action(ContextMenuActionItem(text: chatPresentationInterfaceState.strings.Conversation_MessageDialogEdit, icon: { theme in
-                            return generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.actionSheet.primaryTextColor)
+                            return generateTintedImage(image: UIImage(systemName: "pencil", withConfiguration: UIImage.SymbolConfiguration(pointSize: 24.0, weight: .regular)), color: theme.actionSheet.primaryTextColor)
                         }, action: { c, f in
                             interfaceInteraction.setupEditMessage(messages[0].id, { transition in
                                 f(.custom(transition))

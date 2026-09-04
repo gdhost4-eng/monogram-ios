@@ -106,10 +106,10 @@ private func monogramBookmarksEntries(
     bookmarks: [MonogramBookmark]
 ) -> [MonogramBookmarksEntry] {
     var entries: [MonogramBookmarksEntry] = [
-        .search(text: query, placeholder: presentationData.strings.Monogram_Bookmarks_Search),
+        .search(text: query, placeholder: "Поиск по закреплениям"),
     ]
     if bookmarks.isEmpty {
-        entries.append(.empty(text: query.isEmpty ? presentationData.strings.Monogram_Bookmarks_Empty : presentationData.strings.Monogram_Bookmarks_NoResults))
+        entries.append(.empty(text: query.isEmpty ? "Локальных закреплений пока нет." : "Ничего не найдено."))
         return entries
     }
 
@@ -118,8 +118,6 @@ private func monogramBookmarksEntries(
         let label: String
         if let note = bookmark.note {
             label = note
-        } else if !bookmark.tags.isEmpty {
-            label = bookmark.tags.map { "#\($0)" }.joined(separator: " ")
         } else {
             label = "\(presentationData.strings.Monogram_Bookmarks_Peer) \(bookmark.messageId.peerId.toInt64())"
         }
@@ -137,7 +135,7 @@ public func monogramBookmarksController(
     let filteredBookmarks = queryPromise.get()
     |> mapToSignal { query in
         return searchMonogramBookmarks(postbox: context.account.postbox, query: query)
-        |> map { (query, $0) }
+        |> map { (query, $0.filter { $0.tags.contains("monogram-pin") }) }
     }
     let arguments = MonogramBookmarksControllerArguments(updateQuery: { query in
         queryPromise.set(query)
@@ -154,7 +152,7 @@ public func monogramBookmarksController(
     |> map { presentationData, searchResult -> (ItemListControllerState, (ItemListNodeState, Any)) in
         let controllerState = ItemListControllerState(
             presentationData: ItemListPresentationData(presentationData),
-            title: .text(presentationData.strings.Monogram_Bookmarks_Title),
+            title: .text("Локальные закрепления"),
             leftNavigationButton: nil,
             rightNavigationButton: nil,
             backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back)

@@ -43,7 +43,7 @@ class LocalDataSourceTests(unittest.TestCase):
             / "ChatInterfaceStateContextMenus.swift"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("settings.isEnabled(.localBookmarks)", source)
+        self.assertIn("settings.isEnabled(.localMessagePins)", source)
         self.assertIn("MonogramLocalDataPolicy.bookmarkDenialReason", source)
         self.assertIn("setMonogramBookmark(", source)
         self.assertIn("removeMonogramBookmark(", source)
@@ -57,10 +57,10 @@ class LocalDataSourceTests(unittest.TestCase):
         self.assertIn("queryPromise", controller)
         self.assertIn("arguments.editBookmark(value)", controller)
         self.assertIn("monogramBookmarkEditorController", controller)
-        self.assertIn("MonogramTag.parse(state.tags)", editor)
+        self.assertIn('tags: ["monogram-pin"]', editor)
         self.assertIn("removeMonogramBookmark", editor)
         self.assertIn("openMessage: openMessage", editor)
-        self.assertIn("DeleteConfirmTitle", editor)
+        self.assertIn("Открепить сообщение?", editor)
         self.assertIn("TextAlertAction(type: .destructiveAction", editor)
         self.assertIn("monogramBookmarksController(context: context", advanced_settings)
         self.assertIn("navigateToChatController", advanced_settings)

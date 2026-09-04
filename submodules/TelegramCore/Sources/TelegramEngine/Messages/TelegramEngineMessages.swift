@@ -97,8 +97,8 @@ public extension TelegramEngine {
         	return _internal_clearCloudDraftsInteractively(postbox: self.account.postbox, network: self.account.network, accountPeerId: self.account.peerId)
         }
 
-        public func applyMaxReadIndexInteractively(index: MessageIndex) -> Signal<Void, NoError> {
-            return _internal_applyMaxReadIndexInteractively(postbox: self.account.postbox, stateManager: self.account.stateManager, index: index)
+        public func applyMaxReadIndexInteractively(index: MessageIndex, locally: Bool = false) -> Signal<Void, NoError> {
+            return _internal_applyMaxReadIndexInteractively(postbox: self.account.postbox, stateManager: self.account.stateManager, index: index, locally: locally)
         }
 
         public func sendScheduledMessageNowInteractively(messageId: MessageId) -> Signal<Never, NoError> {

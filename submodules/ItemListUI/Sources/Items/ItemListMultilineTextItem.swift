@@ -19,6 +19,7 @@ public class ItemListMultilineTextItem: ListViewItem, ItemListItem {
     let font: ItemListMultilineTextBaseFont
     public let sectionId: ItemListSectionId
     let style: ItemListStyle
+    let isTextSelectionEnabled: Bool
     let action: (() -> Void)?
     let longTapAction: (() -> Void)?
     let linkItemAction: ((TextLinkItemActionType, TextLinkItem) -> Void)?
@@ -27,13 +28,14 @@ public class ItemListMultilineTextItem: ListViewItem, ItemListItem {
     
     public let selectable: Bool
     
-    public init(presentationData: ItemListPresentationData, text: String, enabledEntityTypes: EnabledEntityTypes, font: ItemListMultilineTextBaseFont = .default, sectionId: ItemListSectionId, style: ItemListStyle, action: (() -> Void)? = nil, longTapAction: (() -> Void)? = nil, linkItemAction: ((TextLinkItemActionType, TextLinkItem) -> Void)? = nil, tag: Any? = nil) {
+    public init(presentationData: ItemListPresentationData, text: String, enabledEntityTypes: EnabledEntityTypes, font: ItemListMultilineTextBaseFont = .default, sectionId: ItemListSectionId, style: ItemListStyle, isTextSelectionEnabled: Bool = false, action: (() -> Void)? = nil, longTapAction: (() -> Void)? = nil, linkItemAction: ((TextLinkItemActionType, TextLinkItem) -> Void)? = nil, tag: Any? = nil) {
         self.presentationData = presentationData
         self.text = text
         self.enabledEntityTypes = enabledEntityTypes
         self.font = font
         self.sectionId = sectionId
         self.style = style
+        self.isTextSelectionEnabled = isTextSelectionEnabled
         self.action = action
         self.longTapAction = longTapAction
         self.linkItemAction = linkItemAction
@@ -91,6 +93,7 @@ public class ItemListMultilineTextItemNode: ListViewItemNode {
     private var linkHighlightingNode: LinkHighlightingNode?
     
     private let textNode: TextNode
+    private var selectableTextView: UITextView?
     
     private let activateArea: AccessibilityAreaNode
     
@@ -101,7 +104,7 @@ public class ItemListMultilineTextItemNode: ListViewItemNode {
     }
     
     override public var canBeLongTapped: Bool {
-        return true
+        return self.item?.isTextSelectionEnabled != true
     }
     
     public init() {
@@ -138,6 +141,9 @@ public class ItemListMultilineTextItemNode: ListViewItemNode {
         
         let recognizer = TapLongTapOrDoubleTapGestureRecognizer(target: self, action: #selector(self.tapLongTapOrDoubleTapGesture(_:)))
         recognizer.tapActionAtPoint = { [weak self] point in
+            if self?.item?.isTextSelectionEnabled == true {
+                return .fail
+            }
             if let strongSelf = self, strongSelf.linkItemAtPoint(point) != nil {
                 return .waitForSingleTap
             }
@@ -200,6 +206,20 @@ public class ItemListMultilineTextItemNode: ListViewItemNode {
             let string = stringWithAppliedEntities(item.text, entities: entities, baseColor: textColor, linkColor: item.presentationData.theme.list.itemAccentColor, baseFont: baseFont, linkFont: linkFont, boldFont: boldFont, italicFont: italicFont, boldItalicFont: boldItalicFont, fixedFont: titleFixedFont, blockQuoteFont: baseFont, message: nil)
             
             let (titleLayout, titleApply) = makeTextLayout(TextNodeLayoutArguments(attributedString: string, backgroundColor: nil, maximumNumberOfLines: 0, truncationType: .end, constrainedSize: CGSize(width: params.width - leftInset * 2.0, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
+
+            var textSize = titleLayout.size
+            if item.isTextSelectionEnabled {
+                // Match UITextView's TextKit layout without creating UIKit views
+                // on the background layout queue.
+                let storage = NSTextStorage(attributedString: string)
+                let manager = NSLayoutManager()
+                let container = NSTextContainer(size: CGSize(width: params.width - leftInset * 2.0, height: CGFloat.greatestFiniteMagnitude))
+                container.lineFragmentPadding = 0.0
+                manager.addTextContainer(container)
+                storage.addLayoutManager(manager)
+                manager.ensureLayout(for: container)
+                textSize = CGSize(width: container.size.width, height: ceil(max(manager.usedRect(for: container).maxY, manager.extraLineFragmentRect.maxY)))
+            }
             
             let contentSize: CGSize
             let insets: UIEdgeInsets
@@ -207,10 +227,10 @@ public class ItemListMultilineTextItemNode: ListViewItemNode {
             
             switch item.style {
                 case .plain:
-                    contentSize = CGSize(width: params.width, height: titleLayout.size.height + 22.0)
+                    contentSize = CGSize(width: params.width, height: textSize.height + 22.0)
                     insets = itemListNeighborsPlainInsets(neighbors)
                 case .blocks:
-                    contentSize = CGSize(width: params.width, height: titleLayout.size.height + 22.0)
+                    contentSize = CGSize(width: params.width, height: textSize.height + 22.0)
                     insets = itemListNeighborsGroupedInsets(neighbors, params)
             }
             
@@ -232,6 +252,38 @@ public class ItemListMultilineTextItemNode: ListViewItemNode {
                     }
                     
                     let _ = titleApply()
+
+                    strongSelf.textNode.isHidden = item.isTextSelectionEnabled
+                    strongSelf.activateArea.isAccessibilityElement = !item.isTextSelectionEnabled
+                    if item.isTextSelectionEnabled {
+                        let textView: UITextView
+                        if let current = strongSelf.selectableTextView {
+                            textView = current
+                        } else {
+                            let storage = NSTextStorage()
+                            let manager = NSLayoutManager()
+                            let container = NSTextContainer(size: .zero)
+                            manager.addTextContainer(container)
+                            storage.addLayoutManager(manager)
+                            textView = UITextView(frame: .zero, textContainer: container)
+                            textView.backgroundColor = .clear
+                            textView.isEditable = false
+                            textView.isSelectable = true
+                            textView.isScrollEnabled = false
+                            textView.textContainerInset = .zero
+                            textView.textContainer.lineFragmentPadding = 0.0
+                            strongSelf.selectableTextView = textView
+                            strongSelf.view.addSubview(textView)
+                        }
+                        if textView.attributedText != string {
+                            textView.attributedText = string
+                        }
+                        textView.tintColor = item.presentationData.theme.list.itemAccentColor
+                        textView.frame = CGRect(origin: CGPoint(x: leftInset, y: 11.0), size: textSize)
+                    } else if let textView = strongSelf.selectableTextView {
+                        textView.removeFromSuperview()
+                        strongSelf.selectableTextView = nil
+                    }
                     
                     switch item.style {
                     case .plain:

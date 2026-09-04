@@ -4,14 +4,14 @@ import TelegramApi
 import SwiftSignalKit
 
 
-func _internal_applyMaxReadIndexInteractively(postbox: Postbox, stateManager: AccountStateManager, index: MessageIndex) -> Signal<Void, NoError> {
+func _internal_applyMaxReadIndexInteractively(postbox: Postbox, stateManager: AccountStateManager, index: MessageIndex, locally: Bool = false) -> Signal<Void, NoError> {
     return postbox.transaction { transaction -> Void in
-        _internal_applyMaxReadIndexInteractively(transaction: transaction, stateManager: stateManager, index: index)
+        _internal_applyMaxReadIndexInteractively(transaction: transaction, stateManager: stateManager, index: index, locally: locally)
     }
 }
     
-func _internal_applyMaxReadIndexInteractively(transaction: Transaction, stateManager: AccountStateManager, index: MessageIndex) {
-    let messageIds = transaction.applyInteractiveReadMaxIndex(index)
+func _internal_applyMaxReadIndexInteractively(transaction: Transaction, stateManager: AccountStateManager, index: MessageIndex, locally: Bool = false) {
+    let messageIds = transaction.applyInteractiveReadMaxIndex(index, locally: locally)
     
     if let peer = transaction.getPeer(index.id.peerId), peer.isForumOrMonoForum {
         if let combinedPeerReadState = transaction.getCombinedPeerReadState(peer.id), combinedPeerReadState.count == 0 {
@@ -37,6 +37,9 @@ func _internal_applyMaxReadIndexInteractively(transaction: Transaction, stateMan
     }
     
     if index.id.peerId.namespace == Namespaces.Peer.SecretChat {
+        guard !locally else {
+            return
+        }
         let timestamp = Int32(CFAbsoluteTimeGetCurrent() + NSTimeIntervalSince1970)
         for id in messageIds {
             if let message = transaction.getMessage(id) {

@@ -1,5 +1,6 @@
 import Foundation
 import TelegramCore
+import MonogramCore
 import Postbox
 import MediaResources
 import PassportUI
@@ -18,7 +19,7 @@ import Display
 import UIKit
 
 public func makeTelegramAccountAuxiliaryMethods(uploadInBackground: ((Postbox, MediaResource) -> Signal<String?, NoError>)?) -> AccountAuxiliaryMethods {
-    return AccountAuxiliaryMethods(fetchResource: { postbox, resource, ranges, _ in
+    return AccountAuxiliaryMethods(configurePostbox: setupMonogramMessagePreservation, fetchResource: { postbox, resource, ranges, _ in
         if let resource = resource as? VideoLibraryMediaResource {
             return postbox.transaction { transaction -> Bool in
                 var useModernPipeline = true

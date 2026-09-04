@@ -18,6 +18,7 @@ import PeerNameColorItem
 import BoostLevelIconComponent
 import MonogramCore
 import MonogramUI
+import ContextUI
 
 private let enabledPublicBioEntities: EnabledEntityTypes = [.allUrl, .mention, .hashtag]
 private let enabledPrivateBioEntities: EnabledEntityTypes = [.internalUrl, .mention, .hashtag]
@@ -871,21 +872,41 @@ func infoItems(
     }
 
     if let peerId = data.peer?.id,
-       MonogramRuntimePolicy.isEnabled(.localNotes, accountPeerId: context.account.peerId),
+       data.monogramNotesEnabled,
        MonogramLocalDataPolicy.allowsPeerAnnotation(peerId: peerId) {
-        items[.peerInfoTrailing]!.append(PeerInfoScreenDisclosureItem(id: 0x4d4f4e, label: .none, text: "Локальная заметка и теги", icon: PresentationResourcesSettings.savedMessages, action: {
-            let _ = (monogramPeerAnnotation(postbox: context.account.postbox, peerId: peerId)
-            |> take(1)
-            |> deliverOnMainQueue).startStandalone(next: { annotation in
-                interaction.getController()?.push(monogramPeerAnnotationEditorController(
-                    context: context,
-                    peerId: peerId,
-                    annotation: annotation,
-                    allowsNote: true,
-                    allowsTags: MonogramRuntimePolicy.isEnabled(.customTags, accountPeerId: context.account.peerId)
-                ))
-            })
-        }))
+        let annotation = data.monogramAnnotation
+        let noteText = annotation?.note ?? ""
+        let editNote: () -> Void = {
+            interaction.getController()?.push(monogramPeerAnnotationEditorController(
+                context: context, peerId: peerId, annotation: annotation
+            ))
+        }
+        let noteContextAction: (ASDisplayNode, ContextGesture?, CGPoint?) -> Void = { node, gesture, _ in
+            guard let sourceNode = node as? ContextExtractedContentContainingNode else { return }
+            let actions: [ContextMenuItem] = [
+                .action(ContextMenuActionItem(text: presentationData.strings.Common_Copy, icon: { theme in
+                    generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Copy"), color: theme.contextMenu.primaryColor)
+                }, action: { _, complete in
+                    UIPasteboard.general.string = noteText
+                    complete(.default)
+                })),
+                .action(ContextMenuActionItem(text: presentationData.strings.Common_Edit, icon: { theme in
+                    generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/Edit"), color: theme.contextMenu.primaryColor)
+                }, action: { controller, _ in
+                    controller?.dismiss(completion: { editNote() })
+                }))
+            ]
+            let controller = makeContextController(presentationData: presentationData, source: .extracted(PeerInfoContextExtractedContentSource(sourceNode: sourceNode)), items: .single(ContextController.Items(content: .list(actions))), gesture: gesture)
+            interaction.getController()?.present(controller, in: .window(.root))
+        }
+        items[.peerInfoTrailing]!.append(PeerInfoScreenLabeledValueItem(
+            id: 0x4d4f4e, label: "Локальная заметка", text: noteText.isEmpty ? "Добавить заметку" : noteText,
+            textColor: noteText.isEmpty ? .accent : .primary,
+            textBehavior: .multiLine(maxLines: 100, enabledEntities: []),
+            action: noteText.isEmpty ? { _, _ in editNote() } : nil,
+            linkItemAction: nil, contextAction: noteContextAction,
+            requestLayout: { animated in interaction.requestLayout(animated) }
+        ))
     }
 
     if let peer = data.peer, let members = data.members, case let .shortList(_, memberList) = members {

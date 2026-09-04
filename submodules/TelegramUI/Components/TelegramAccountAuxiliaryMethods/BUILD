@@ -12,6 +12,7 @@ swift_library(
     deps = [
         "//submodules/Display",
         "//submodules/TelegramCore",
+        "//submodules/MonogramCore",
         "//submodules/Postbox",
         "//submodules/MediaResources",
         "//submodules/PassportUI",

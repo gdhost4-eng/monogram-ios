@@ -46,11 +46,21 @@ public enum MonogramRuntimePolicy {
         return settings
     }
 
+    public static func readsHistoryLocally(accountPeerId: PeerId, peerId: PeerId? = nil) -> Bool {
+        return self.activeGhostSettings(accountPeerId: accountPeerId, peerId: peerId)?.isEnabled(.ghostReadReceipts) == true
+    }
+
     public static func suppressesReadReceipts(accountPeerId: PeerId, peerId: PeerId? = nil) -> Bool {
+        if MonogramOfflineEntry.isActive(accountPeerId: accountPeerId, settings: self.settings(accountPeerId: accountPeerId)) {
+            return true
+        }
         return self.activeGhostSettings(accountPeerId: accountPeerId, peerId: peerId)?.isEnabled(.ghostReadReceipts) == true
     }
 
     public static func suppressesInputActivity(accountPeerId: PeerId, peerId: PeerId? = nil) -> Bool {
+        if MonogramOfflineEntry.isActive(accountPeerId: accountPeerId, settings: self.settings(accountPeerId: accountPeerId)) {
+            return true
+        }
         return self.activeGhostSettings(accountPeerId: accountPeerId, peerId: peerId)?.isEnabled(.ghostTypingActivity) == true
     }
 }

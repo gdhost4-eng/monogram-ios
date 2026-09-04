@@ -10,23 +10,19 @@ import MonogramCore
 
 private struct MonogramBookmarkEditorState: Equatable {
     var note: String
-    var tags: String
 }
 
 private final class MonogramBookmarkEditorArguments {
     let updateNote: (String) -> Void
-    let updateTags: (String) -> Void
     let openMessage: () -> Void
     let deleteBookmark: () -> Void
 
     init(
         updateNote: @escaping (String) -> Void,
-        updateTags: @escaping (String) -> Void,
         openMessage: @escaping () -> Void,
         deleteBookmark: @escaping () -> Void
     ) {
         self.updateNote = updateNote
-        self.updateTags = updateTags
         self.openMessage = openMessage
         self.deleteBookmark = deleteBookmark
     }
@@ -35,9 +31,6 @@ private final class MonogramBookmarkEditorArguments {
 private enum MonogramBookmarkEditorEntry: ItemListNodeEntry {
     case noteHeader(String)
     case note(String, String)
-    case tagsHeader(String)
-    case tags(String, String)
-    case tagsInfo(String)
     case openMessage(String)
     case delete(String)
 
@@ -45,8 +38,6 @@ private enum MonogramBookmarkEditorEntry: ItemListNodeEntry {
         switch self {
         case .noteHeader, .note:
             return 0
-        case .tagsHeader, .tags, .tagsInfo:
-            return 1
         case .openMessage:
             return 2
         case .delete:
@@ -60,12 +51,6 @@ private enum MonogramBookmarkEditorEntry: ItemListNodeEntry {
             return 0
         case .note:
             return 1
-        case .tagsHeader:
-            return 2
-        case .tags:
-            return 3
-        case .tagsInfo:
-            return 4
         case .openMessage:
             return 5
         case .delete:
@@ -80,7 +65,7 @@ private enum MonogramBookmarkEditorEntry: ItemListNodeEntry {
     func item(presentationData: ItemListPresentationData, arguments: Any) -> ListViewItem {
         let arguments = arguments as! MonogramBookmarkEditorArguments
         switch self {
-        case let .noteHeader(text), let .tagsHeader(text):
+        case let .noteHeader(text):
             return ItemListSectionHeaderItem(presentationData: presentationData, text: text, sectionId: self.section)
         case let .note(text, placeholder):
             return ItemListMultilineInputItem(
@@ -95,23 +80,6 @@ private enum MonogramBookmarkEditorEntry: ItemListNodeEntry {
                 autocorrection: true,
                 textUpdated: arguments.updateNote
             )
-        case let .tags(text, placeholder):
-            return ItemListSingleLineInputItem(
-                presentationData: presentationData,
-                systemStyle: .glass,
-                title: NSAttributedString(),
-                text: text,
-                placeholder: placeholder,
-                type: .regular(capitalization: false, autocorrection: false),
-                returnKeyType: .done,
-                clearType: .onFocus,
-                maxLength: 512,
-                sectionId: self.section,
-                textUpdated: arguments.updateTags,
-                action: {}
-            )
-        case let .tagsInfo(text):
-            return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         case let .openMessage(text):
             return ItemListActionItem(presentationData: presentationData, systemStyle: .glass, title: text, kind: .generic, alignment: .natural, sectionId: self.section, style: .blocks, action: arguments.openMessage)
         case let .delete(text):
@@ -127,11 +95,8 @@ private func monogramBookmarkEditorEntries(
     return [
         .noteHeader(presentationData.strings.Monogram_BookmarkEditor_NoteHeader),
         .note(state.note, presentationData.strings.Monogram_BookmarkEditor_NotePlaceholder),
-        .tagsHeader(presentationData.strings.Monogram_BookmarkEditor_TagsHeader),
-        .tags(state.tags, presentationData.strings.Monogram_BookmarkEditor_TagsPlaceholder),
-        .tagsInfo(presentationData.strings.Monogram_BookmarkEditor_TagsInfo),
         .openMessage(presentationData.strings.Monogram_BookmarkEditor_OpenMessage),
-        .delete(presentationData.strings.Monogram_BookmarkEditor_Delete),
+        .delete("Открепить локально"),
     ]
 }
 
@@ -141,8 +106,7 @@ public func monogramBookmarkEditorController(
     openMessage: @escaping () -> Void
 ) -> ViewController {
     let initialState = MonogramBookmarkEditorState(
-        note: bookmark.note ?? "",
-        tags: bookmark.tags.map { "#\($0)" }.joined(separator: " ")
+        note: bookmark.note ?? ""
     )
     let stateValue = Atomic(value: initialState)
     let statePromise = ValuePromise(initialState, ignoreRepeated: true)
@@ -157,13 +121,6 @@ public func monogramBookmarkEditorController(
             updateState { state in
                 var state = state
                 state.note = value
-                return state
-            }
-        },
-        updateTags: { value in
-            updateState { state in
-                var state = state
-                state.tags = value
                 return state
             }
         },
@@ -183,7 +140,7 @@ public func monogramBookmarkEditorController(
                 postbox: context.account.postbox,
                 messageId: bookmark.messageId,
                 note: state.note,
-                tags: MonogramTag.parse(state.tags),
+                tags: ["monogram-pin"],
                 isCopyProtected: false,
                 isEphemeral: false
             )
@@ -193,7 +150,7 @@ public func monogramBookmarkEditorController(
         })
         let controllerState = ItemListControllerState(
             presentationData: ItemListPresentationData(presentationData),
-            title: .text(presentationData.strings.Monogram_BookmarkEditor_Title),
+            title: .text("Локальное закрепление"),
             leftNavigationButton: nil,
             rightNavigationButton: rightNavigationButton,
             backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back)
@@ -215,8 +172,8 @@ public func monogramBookmarkEditorController(
         let presentationData = context.sharedContext.currentPresentationData.with { $0 }
         controller?.present(textAlertController(
             context: context,
-            title: presentationData.strings.Monogram_BookmarkEditor_DeleteConfirmTitle,
-            text: presentationData.strings.Monogram_BookmarkEditor_DeleteConfirmText,
+            title: "Открепить сообщение?",
+            text: "Локальное закрепление будет удалено. Сообщение останется в чате.",
             actions: [
                 TextAlertAction(type: .genericAction, title: presentationData.strings.Common_Cancel, action: {}),
                 TextAlertAction(type: .destructiveAction, title: presentationData.strings.Common_Delete, action: {

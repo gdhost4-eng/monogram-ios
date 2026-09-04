@@ -67,11 +67,11 @@ private enum MonogramPeerAnnotationsEntry: ItemListNodeEntry {
         let arguments = arguments as! MonogramPeerAnnotationsArguments
         switch self {
         case let .search(value):
-            return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: NSAttributedString(), text: value, placeholder: "Поиск по заметкам и тегам", type: .regular(capitalization: false, autocorrection: false), returnKeyType: .done, clearType: .always, sectionId: self.section, textUpdated: arguments.updateQuery, action: {})
+            return ItemListSingleLineInputItem(presentationData: presentationData, systemStyle: .glass, title: NSAttributedString(), text: value, placeholder: "Поиск по заметкам", type: .regular(capitalization: false, autocorrection: false), returnKeyType: .done, clearType: .always, sectionId: self.section, textUpdated: arguments.updateQuery, action: {})
         case let .empty(text):
             return ItemListTextItem(presentationData: presentationData, text: .plain(text), sectionId: self.section)
         case let .annotation(_, value):
-            let label = value.note ?? value.tags.map { "#\($0)" }.joined(separator: " ")
+            let label = value.note ?? ""
             return ItemListDisclosureItem(presentationData: presentationData, systemStyle: .glass, title: "Чат \(value.peerId.toInt64())", label: label, labelStyle: .multilineDetailText, sectionId: self.section, style: .blocks, action: { arguments.open(value) })
         }
     }
@@ -89,9 +89,7 @@ public func monogramPeerAnnotationsController(context: AccountContext) -> ViewCo
         pushController?(monogramPeerAnnotationEditorController(
             context: context,
             peerId: annotation.peerId,
-            annotation: annotation,
-            allowsNote: true,
-            allowsTags: MonogramRuntimePolicy.isEnabled(.customTags, accountPeerId: context.account.peerId)
+            annotation: annotation
         ))
     })
     let signal = combineLatest(context.sharedContext.presentationData, values)
@@ -105,7 +103,7 @@ public func monogramPeerAnnotationsController(context: AccountContext) -> ViewCo
             entries.append(contentsOf: annotations.enumerated().map { .annotation($0.offset, $0.element) })
         }
         return (
-            ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Заметки и теги"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back)),
+            ItemListControllerState(presentationData: ItemListPresentationData(presentationData), title: .text("Локальные заметки"), leftNavigationButton: nil, rightNavigationButton: nil, backNavigationButton: ItemListBackButton(title: presentationData.strings.Common_Back)),
             (ItemListNodeState(presentationData: ItemListPresentationData(presentationData), entries: entries, style: .blocks, animateChanges: true), arguments)
         )
     }

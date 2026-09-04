@@ -1,4 +1,5 @@
 import Foundation
+import MonogramCore
 import UIKit
 import Postbox
 import TelegramCore
@@ -405,6 +406,8 @@ private func peerInfoStatusWithHiddenCommunityPrefix(_ status: PeerInfoStatusDat
 }
 
 final class PeerInfoScreenData {
+    var monogramAnnotation: MonogramPeerAnnotation?
+    var monogramNotesEnabled: Bool = false
     let peer: EnginePeer?
     let chatPeer: EnginePeer?
     let savedMessagesPeer: EnginePeer?

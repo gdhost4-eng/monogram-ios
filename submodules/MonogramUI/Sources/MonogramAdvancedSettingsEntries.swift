@@ -79,6 +79,8 @@ private func monogramFeatureTitle(id: MonogramFeatureId, strings: PresentationSt
     switch id {
     case .advancedSettings:
         return "Monogram"
+    case .offlineEntry:
+        return "Предупреждение об выходе в сеть"
     case .ghostMode:
         return "Ghost Mode"
     case .ghostReadReceipts:
@@ -89,12 +91,8 @@ private func monogramFeatureTitle(id: MonogramFeatureId, strings: PresentationSt
         return "Сохранять удалённые сообщения"
     case .preserveEditHistory:
         return "История редактирования"
-    case .localBookmarks:
-        return strings.Monogram_AdvancedSettings_Bookmarks
     case .localNotes:
         return strings.Monogram_AdvancedSettings_Notes
-    case .customTags:
-        return strings.Monogram_AdvancedSettings_Tags
     case .powerUserInformation:
         return strings.Monogram_AdvancedSettings_PowerUser
     case .localMessagePins:
@@ -103,8 +101,6 @@ private func monogramFeatureTitle(id: MonogramFeatureId, strings: PresentationSt
         return "Подтверждать голосовые сообщения"
     case .suppressAutomaticKeyboard:
         return "Не открывать клавиатуру автоматически"
-    case .confirmAccountBeforeSending:
-        return "Проверять аккаунт перед отправкой"
     case .suppressIncomingAutoScroll:
         return "Не прокручивать чат при новых сообщениях"
     }
@@ -134,6 +130,7 @@ func monogramAdvancedSettingsEntries(
     }
 
     append(.privacy, .header(text: "ПРИВАТНОСТЬ"))
+    toggle(.privacy, .offlineEntry)
     toggle(.privacy, .ghostMode)
     if ghostModeActive {
         let durationLabel: String
@@ -147,7 +144,7 @@ func monogramAdvancedSettingsEntries(
         toggle(.privacy, .ghostReadReceipts)
         toggle(.privacy, .ghostTypingActivity)
     }
-    append(.privacy, .footer(text: "Ghost Mode не меняет серверные настройки «Последняя активность», но при работе приложения не публикует статус «в сети» и не отправляет события прочтения, набора текста и записи из открытого чата."))
+    append(.privacy, .footer(text: "Предупреждение об выходе в сеть при каждом открытии приложения временно скрывает вашу активность, размывает и блокирует список чатов, если Ghost Mode выключен. Нижняя панель остаётся доступной. Нажмите «Выйти в сеть» для обычной работы или включите Ghost Mode в настройках: список разблокируется автоматически, а активность останется скрытой. Если затем выключить Ghost Mode, предупреждение не появится до следующего входа в приложение. Ghost Mode не меняет серверные настройки «Последняя активность», но при работе приложения не публикует статус «в сети» и не отправляет события прочтения, набора текста и записи из открытого чата."))
 
     append(.localData, .header(text: "ЛОКАЛЬНЫЕ ДАННЫЕ"))
     toggle(.localData, .preserveDeletedMessages)
@@ -155,14 +152,12 @@ func monogramAdvancedSettingsEntries(
         append(.localData, .navigation(title: "Очистить сохранённые сообщения", label: "\(deletedCount)", action: .clearDeleted))
     }
     toggle(.localData, .preserveEditHistory)
-    toggle(.localData, .localBookmarks)
     toggle(.localData, .localMessagePins)
-    if accountSettings.isEnabled(.localBookmarks) || accountSettings.isEnabled(.localMessagePins) {
-        append(.localData, .navigation(title: presentationData.strings.Monogram_Bookmarks_Manage, label: "\(bookmarksCount)", action: .bookmarks))
+    if accountSettings.isEnabled(.localMessagePins) {
+        append(.localData, .navigation(title: "Локальные закрепления", label: "\(bookmarksCount)", action: .bookmarks))
     }
     toggle(.localData, .localNotes)
     if accountSettings.isEnabled(.localNotes) {
-        toggle(.localData, .customTags)
         append(.localData, .navigation(title: "Управление заметками", label: "\(annotationsCount)", action: .annotations))
     }
     append(.localData, .footer(text: "Удалённые сообщения остаются на прежнем месте с пометкой. Повторное локальное удаление убирает сохранённую копию. Секретные, исчезающие и защищённые сообщения не сохраняются."))
@@ -171,9 +166,8 @@ func monogramAdvancedSettingsEntries(
     toggle(.chatBehavior, .powerUserInformation)
     toggle(.chatBehavior, .confirmVoiceMessages)
     toggle(.chatBehavior, .suppressAutomaticKeyboard)
-    toggle(.chatBehavior, .confirmAccountBeforeSending)
     toggle(.chatBehavior, .suppressIncomingAutoScroll)
-    append(.chatBehavior, .footer(text: "Технические идентификаторы появляются в контекстном меню. Подтверждение записи открывает предпросмотр. Проверка аккаунта показывает имя активного аккаунта перед каждой отправкой. Блокировка автопрокрутки сохраняет текущую позицию при входящих сообщениях."))
+    append(.chatBehavior, .footer(text: "Технические идентификаторы появляются в контекстном меню. Подтверждение записи открывает предпросмотр. Блокировка автопрокрутки сохраняет текущую позицию при входящих сообщениях."))
 
     return entries
 }

@@ -1,4 +1,5 @@
 import Foundation
+import MonogramCore
 import UIKit
 import Display
 import AsyncDisplayKit
@@ -2508,8 +2509,10 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             queue: Queue.mainQueue(),
             screenData,
             self.forceIsContactPromise.get(),
-            reactionSourceMessage
-        ).startStrict(next: { [weak self] data, forceIsContact, reactionSourceMessage in
+            reactionSourceMessage,
+            monogramPeerAnnotation(postbox: context.account.postbox, peerId: peerId),
+            monogramAccountSettings(postbox: context.account.postbox)
+        ).startStrict(next: { [weak self] data, forceIsContact, reactionSourceMessage, annotation, monogramSettings in
             guard let strongSelf = self else {
                 return
             }
@@ -2533,6 +2536,8 @@ final class PeerInfoScreenNode: ViewControllerTracingNode, PeerInfoScreenNodePro
             } else {
                 data.forceIsContact = forceIsContact
             }
+            data.monogramAnnotation = annotation
+            data.monogramNotesEnabled = monogramSettings.isEnabled(.localNotes)
             strongSelf.updateData(data)
             strongSelf.cachedDataPromise.set(.single(data.cachedData))
         })

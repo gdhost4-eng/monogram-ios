@@ -9,18 +9,16 @@ public enum MonogramSettingScope: String, Codable, CaseIterable, Hashable {
 public enum MonogramFeatureId: String, Codable, CaseIterable, Hashable {
     case advancedSettings
     case ghostMode
+    case offlineEntry
     case ghostReadReceipts
     case ghostTypingActivity
     case preserveDeletedMessages
     case preserveEditHistory
-    case localBookmarks
     case localNotes
-    case customTags
     case powerUserInformation
     case localMessagePins
     case confirmVoiceMessages
     case suppressAutomaticKeyboard
-    case confirmAccountBeforeSending
     case suppressIncomingAutoScroll
 }
 
@@ -46,19 +44,17 @@ public struct MonogramFeatureDescriptor: Codable, Equatable {
 public enum MonogramFeatureRegistry {
     public static let all: [MonogramFeatureDescriptor] = [
         MonogramFeatureDescriptor(id: .advancedSettings, defaultValue: true, isExperimental: false, scopes: [.global]),
+        MonogramFeatureDescriptor(id: .offlineEntry, defaultValue: false, isExperimental: false, scopes: [.account]),
         MonogramFeatureDescriptor(id: .ghostMode, defaultValue: false, isExperimental: false, scopes: [.account]),
         MonogramFeatureDescriptor(id: .ghostReadReceipts, defaultValue: true, isExperimental: false, scopes: [.account]),
         MonogramFeatureDescriptor(id: .ghostTypingActivity, defaultValue: true, isExperimental: false, scopes: [.account]),
         MonogramFeatureDescriptor(id: .preserveDeletedMessages, defaultValue: false, isExperimental: false, scopes: [.account]),
         MonogramFeatureDescriptor(id: .preserveEditHistory, defaultValue: false, isExperimental: false, scopes: [.account]),
-        MonogramFeatureDescriptor(id: .localBookmarks, defaultValue: false, isExperimental: false, scopes: [.account]),
         MonogramFeatureDescriptor(id: .localNotes, defaultValue: false, isExperimental: false, scopes: [.account]),
-        MonogramFeatureDescriptor(id: .customTags, defaultValue: false, isExperimental: false, scopes: [.account]),
         MonogramFeatureDescriptor(id: .powerUserInformation, defaultValue: false, isExperimental: false, scopes: [.account]),
         MonogramFeatureDescriptor(id: .localMessagePins, defaultValue: false, isExperimental: false, scopes: [.account]),
         MonogramFeatureDescriptor(id: .confirmVoiceMessages, defaultValue: false, isExperimental: false, scopes: [.account]),
         MonogramFeatureDescriptor(id: .suppressAutomaticKeyboard, defaultValue: false, isExperimental: false, scopes: [.account]),
-        MonogramFeatureDescriptor(id: .confirmAccountBeforeSending, defaultValue: false, isExperimental: false, scopes: [.account]),
         MonogramFeatureDescriptor(id: .suppressIncomingAutoScroll, defaultValue: false, isExperimental: false, scopes: [.account]),
     ]
 

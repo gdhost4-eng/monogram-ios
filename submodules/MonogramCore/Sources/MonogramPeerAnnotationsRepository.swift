@@ -32,12 +32,14 @@ public func monogramPeerAnnotation(postbox: Postbox, peerId: PeerId) -> Signal<M
 
 public func searchMonogramPeerAnnotations(
     postbox: Postbox,
-    query: String,
-    tags: [String] = []
+    query: String
 ) -> Signal<[MonogramPeerAnnotation], NoError> {
     return monogramPeerAnnotations(postbox: postbox)
     |> map { annotations in
-        return annotations.filter { $0.matches(query: query, tags: tags) }
+        return annotations.filter { annotation in
+            guard annotation.note != nil else { return false }
+            return MonogramLocalMetadata.matches(note: annotation.note, tags: [], query: query, requiredTags: [])
+        }
     }
 }
 
