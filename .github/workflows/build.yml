@@ -30,19 +30,52 @@ jobs:
       - name: Restore private Monogram configuration
         env:
           MONOGRAM_CONFIGURATION_BASE64: ${{ secrets.MONOGRAM_CONFIGURATION_BASE64 }}
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+          MONOGRAM_BUNDLE_ID: ${{ vars.MONOGRAM_BUNDLE_ID }}
+          MONOGRAM_TEAM_ID: ${{ vars.MONOGRAM_TEAM_ID }}
+          MONOGRAM_URL_SCHEME: ${{ vars.MONOGRAM_URL_SCHEME }}
         run: |
-          if [ -z "$MONOGRAM_CONFIGURATION_BASE64" ]; then
-            echo "Missing MONOGRAM_CONFIGURATION_BASE64 repository secret."
-            exit 1
-          fi
+          # A complete configuration may be supplied as a single base64 secret. Otherwise it
+          # is assembled from the api id/hash secrets plus optional repository variables, so
+          # a fork only needs the two values from https://my.telegram.org/apps.
           python3 - <<'PY'
           import base64
+          import json
           import os
           from pathlib import Path
 
-          Path("build-system/monogram-development-configuration.json").write_bytes(
-              base64.b64decode(os.environ["MONOGRAM_CONFIGURATION_BASE64"], validate=True)
-          )
+          destination = Path("build-system/monogram-development-configuration.json")
+          encoded = os.environ.get("MONOGRAM_CONFIGURATION_BASE64", "").strip()
+
+          if encoded:
+              destination.write_bytes(base64.b64decode(encoded, validate=True))
+              raise SystemExit(0)
+
+          api_id = os.environ.get("TELEGRAM_API_ID", "").strip()
+          api_hash = os.environ.get("TELEGRAM_API_HASH", "").strip()
+          if not api_id or not api_hash:
+              raise SystemExit(
+                  "Set either the MONOGRAM_CONFIGURATION_BASE64 secret, or both the "
+                  "TELEGRAM_API_ID and TELEGRAM_API_HASH secrets."
+              )
+
+          destination.write_text(json.dumps({
+              "bundle_id": os.environ.get("MONOGRAM_BUNDLE_ID", "").strip() or "org.monogram.Monogram",
+              "api_id": api_id,
+              "api_hash": api_hash,
+              # The build is signed with the tracked self-signed certificate, so the team id
+              # only has to match the regenerated provisioning profiles.
+              "team_id": os.environ.get("MONOGRAM_TEAM_ID", "").strip() or "C67CF9S4VU",
+              "app_center_id": "0",
+              "is_internal_build": "true",
+              "is_appstore_build": "false",
+              "appstore_id": "0",
+              "app_specific_url_scheme": os.environ.get("MONOGRAM_URL_SCHEME", "").strip() or "monogram",
+              "premium_iap_product_id": "",
+              "enable_siri": False,
+              "enable_icloud": False,
+          }, indent=4), encoding="utf-8")
           PY
           python3 scripts/validate_monogram_configuration.py build-system/monogram-development-configuration.json
 
@@ -82,13 +115,19 @@ jobs:
           echo "BUILD_NUMBER=$(echo $BUILD_NUMBER)" >> $GITHUB_ENV
           echo "APP_VERSION=$(echo $APP_VERSION)" >> $GITHUB_ENV
 
-          python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
+          # The tracked fake profiles are issued for ph.telegra.Telegraph; regenerate
+          # them for this configuration's bundle id, or no profile matches it at all.
+          python3 scripts/generate_fake_codesigning.py \
+            --configuration build-system/monogram-development-configuration.json \
+            --destination build-system/generated-codesigning
+
+          python3 build-system/Make/ImportCertificates.py --path build-system/generated-codesigning/certs
           python3 -u build-system/Make/Make.py \
             --bazelUserRoot="$BAZEL_USER_ROOT" \
             --cacheDir=/Users/Shared/bazel-disk-cache \
             build \
             --configurationPath="build-system/monogram-development-configuration.json" \
-            --codesigningInformationPath=build-system/fake-codesigning \
+            --codesigningInformationPath=build-system/generated-codesigning \
             --configuration=release_arm64 \
             --buildNumber="$BUILD_NUMBER" \
             --outputBuildArtifactsPath=build
