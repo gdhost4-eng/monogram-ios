@@ -186,6 +186,12 @@ private func validatePeerReadState(network: Network, postbox: Postbox, stateMana
                             if case let .idBased(updatedMaxIncomingReadId, _, _, updatedCount, updatedMarkedUnread) = readState {
                                 if updatedCount != 0 || updatedMarkedUnread {
                                     if localMaxIncomingReadId > updatedMaxIncomingReadId {
+                                        if MonogramGhost.blocksReadReceipts {
+                                            // Ghost mode: the chat is read only locally, keep it that way
+                                            // instead of retrying a push the server never receives.
+                                            transaction.confirmSynchronizedIncomingReadState(peerId)
+                                            return nil
+                                        }
                                         return .retry
                                     }
                                 }

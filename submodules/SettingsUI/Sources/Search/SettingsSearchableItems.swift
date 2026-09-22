@@ -15,7 +15,6 @@ import NotificationSoundSelectionUI
 import PresentationDataUtils
 import PhoneNumberFormat
 import AccountUtils
-import MonogramCore
 import InstantPageCache
 import NotificationPeerExceptionController
 import QrCodeUI
@@ -4313,7 +4312,11 @@ func settingsSearchableItems(
     activeSessionsContext: Signal<ActiveSessionsContext?, NoError> = .single(nil),
     webSessionsContext: Signal<WebSessionsContext?, NoError> = .single(nil)
 ) -> Signal<[SettingsSearchableItem], NoError> {
-    let canAddAccount: Signal<Bool, NoError> = .single(MonogramAccountPolicy.allowsAddingAnotherAccount)
+    let canAddAccount = activeAccountsAndPeers(context: context)
+    |> take(1)
+    |> map { accountsAndPeers -> Bool in
+        return accountsAndPeers.1.count + 1 < maximumNumberOfAccounts
+    }
     
     let notificationSettings = context.engine.data.subscribe(TelegramEngine.EngineData.Item.Configuration.ApplicationSpecificPreference(key: PreferencesKeys.globalNotifications))
     |> take(1)

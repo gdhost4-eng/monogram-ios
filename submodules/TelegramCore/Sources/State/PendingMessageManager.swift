@@ -2346,6 +2346,7 @@ public final class PendingMessageManager {
         }
         
         let queue = self.queue
+        let network = self.network
         return applyUpdateMessage(postbox: postbox, stateManager: stateManager, message: message, cacheReferenceKey: content.cacheReferenceKey, result: result, accountPeerId: self.accountPeerId, pendingMessageEvent: { [weak self] pendingMessageDelivered in
             queue.async {
                 if let strongSelf = self {
@@ -2357,6 +2358,9 @@ public final class PendingMessageManager {
                 }
             }
         })
+        |> afterCompleted {
+            monogramGhostDidSendMessage(postbox: postbox, network: network, stateManager: stateManager, messageId: message.id)
+        }
     }
     
     private func applySentGroupMessages(postbox: Postbox, stateManager: AccountStateManager, messages: [Message], result: Api.Updates) -> Signal<Void, NoError> {
@@ -2394,6 +2398,7 @@ public final class PendingMessageManager {
             }
         }
         let queue = self.queue
+        let network = self.network
         
         return applyUpdateGroupMessages(postbox: postbox, stateManager: stateManager, messages: messages, result: result, pendingMessageEvents: { [weak self] pendingMessagesDelivered in
             queue.async {
@@ -2406,6 +2411,11 @@ public final class PendingMessageManager {
                 }
             }
         })
+        |> afterCompleted {
+            if let message = messages.first {
+                monogramGhostDidSendMessage(postbox: postbox, network: network, stateManager: stateManager, messageId: message.id)
+            }
+        }
     }
     
     public func deliveredMessageEvents(peerId: PeerId) -> Signal<[PeerPendingMessageDelivered], NoError> {

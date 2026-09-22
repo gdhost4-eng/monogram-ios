@@ -239,8 +239,8 @@ func settingsItems(data: PeerInfoScreenData?, context: AccountContext, presentat
     items[.advanced]!.append(PeerInfoScreenDisclosureItem(id: 3, text: presentationData.strings.Settings_Appearance, icon: PresentationResourcesSettings.appearance, action: {
         interaction.openSettings(.appearance)
     }))
-    items[.advanced]!.append(PeerInfoScreenDisclosureItem(id: 7, text: presentationData.strings.Monogram_Settings_Advanced, icon: PresentationResourcesSettings.settings, action: {
-        interaction.openSettings(.advancedSettings)
+    items[.advanced]!.append(PeerInfoScreenDisclosureItem(id: 7, label: MonogramGhost.isActive ? .text("Призрак") : .none, text: "Monogram", icon: PresentationResourcesSettings.settings, action: {
+        interaction.openSettings(.monogram)
     }))
     
     items[.advanced]!.append(PeerInfoScreenDisclosureItem(id: 6, label: .text(data.isPowerSavingEnabled == true ? presentationData.strings.Settings_PowerSavingOn : presentationData.strings.Settings_PowerSavingOff), text: presentationData.strings.Settings_PowerSaving, icon: PresentationResourcesSettings.powerSaving, action: {

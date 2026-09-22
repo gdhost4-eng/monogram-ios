@@ -473,6 +473,7 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
     var didAppear = false
     var enableAnimations = false
     var scheduledActivateInput: ChatControllerActivateInput?
+    var monogramSendConfirmed: Bool = false
     
     var raiseToListen: RaiseToListenManager?
     var voicePlaylistDidEndTimestamp: Double = 0.0
@@ -2315,6 +2316,12 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                 }
             }
             
+            if strongSelf.monogramConfirmSendIfNeeded(.confirmStickers, text: "Отправить стикер?", send: { [weak strongSelf] in
+                let _ = strongSelf?.controllerInteraction?.sendSticker(fileReference, silentPosting, schedule, query, clearInput, sourceView, sourceRect, sourceLayer, bubbleUpEmojiOrStickersets)
+            }) {
+                return false
+            }
+            
             var attributes: [MessageAttribute] = []
             if let query = query {
                 attributes.append(EmojiSearchQueryMessageAttribute(query: query))
@@ -2586,6 +2593,12 @@ public final class ChatControllerImpl: TelegramBaseController, ChatController, G
                         strongSelf.interfaceInteraction?.openBoostToUnrestrict()
                         return false
                     }
+                }
+                
+                if strongSelf.monogramConfirmSendIfNeeded(.confirmGifs, text: "Отправить GIF?", send: { [weak strongSelf] in
+                    let _ = strongSelf?.controllerInteraction?.sendGif(fileReference, sourceView, sourceRect, silentPosting, schedule)
+                }) {
+                    return false
                 }
                 
                 strongSelf.presentPaidMessageAlertIfNeeded(completion: { [weak self] postpone in

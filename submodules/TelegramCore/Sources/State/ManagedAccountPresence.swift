@@ -13,6 +13,7 @@ private final class AccountPresenceManagerImpl {
     let isPerformingUpdate = ValuePromise<Bool>(false, ignoreRepeated: true)
     
     private var shouldKeepOnlinePresenceDisposable: Disposable?
+    private var ghostModeDisposable: Disposable?
     private let currentRequestDisposable = MetaDisposable()
     private var onlineTimer: SignalKitTimer?
     
@@ -33,11 +34,27 @@ private final class AccountPresenceManagerImpl {
                 self.updatePresence(value)
             }
         })
+        
+        // Report the status right away when ghost mode is switched, not on the next timer tick.
+        self.ghostModeDisposable = (MonogramSettings.updates()
+        |> map { _ -> Bool in
+            return MonogramGhost.blocksOnline
+        }
+        |> distinctUntilChanged
+        |> deliverOn(self.queue)).start(next: { [weak self] _ in
+            guard let self else {
+                return
+            }
+            if self.wasOnline {
+                self.updatePresence(true)
+            }
+        })
     }
     
     deinit {
         assert(self.queue.isCurrent())
         self.shouldKeepOnlinePresenceDisposable?.dispose()
+        self.ghostModeDisposable?.dispose()
         self.currentRequestDisposable.dispose()
         self.onlineTimer?.invalidate()
     }
@@ -53,7 +70,9 @@ private final class AccountPresenceManagerImpl {
             }, queue: self.queue)
             self.onlineTimer = timer
             timer.start()
-            request = self.network.request(Api.functions.account.updateStatus(offline: .boolFalse))
+            // Ghost mode: keep the timer running (to come back online once the mode is off),
+            // but tell the server the account is offline.
+            request = self.network.request(Api.functions.account.updateStatus(offline: MonogramGhost.blocksOnline ? .boolTrue : .boolFalse))
         } else {
             self.onlineTimer?.invalidate()
             self.onlineTimer = nil

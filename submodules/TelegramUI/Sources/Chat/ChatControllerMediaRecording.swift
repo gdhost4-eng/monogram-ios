@@ -247,6 +247,10 @@ extension ChatControllerImpl {
     
     func dismissMediaRecorder(_ action: ChatFinishMediaRecordingAction) {
         var updatedAction = action
+        if MonogramSettings.get(.confirmVoice), case .send = updatedAction {
+            // Monogram: show the recorded voice/video message for a check instead of sending it right away.
+            updatedAction = .preview
+        }
         var isScheduledMessages = false
         if case .scheduledMessages = self.presentationInterfaceState.subject {
             isScheduledMessages = true

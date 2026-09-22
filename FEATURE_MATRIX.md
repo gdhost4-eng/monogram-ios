@@ -39,23 +39,23 @@
 
 ## Возможности Monogram
 
-| Возможность | Статус | Следующая проверяемая точка |
+Старый слой (MonogramCore/MonogramUI: закладки, теги, Advanced Settings, снятие лимита аккаунтов) удалён 2026-09-23. Функции заново перенесены из Monogram для ПК; все настраиваются в **Настройки → Monogram**. Статус — `⚪ not tested`, пока нет сборки и smoke test.
+
+| Возможность | Статус | Где реализовано |
 | --- | --- | --- |
-| Изолированный Extension Layer | 🟡 partial | `MonogramCore` и `MonogramUI` добавлены; build verification ожидается |
-| Advanced Settings | 🟡 partial | Экран подключён, global/per-account persistence работает по коду; per-chat scope и build test ожидаются |
-| Feature flags / experimental flags | 🟡 partial | Typed registry, schema v1, safe defaults/migration и tests добавлены, но не запущены |
-| Нет фиксированного лимита аккаунтов | 🟡 partial | Пять UI gate и обе константы 3/4 удалены, policy = no maximum; нужны build и тесты 4+/10+ accounts |
-| Reorder/account switcher improvements | ➕ custom — planned | Сохранить `AccountSortOrderAttribute`, добавить UX audit |
-| Local bookmarks | 🟡 partial | Repository, privacy gates, context action, list, reactive note/tag search, editor, open-message и confirmed delete готовы; iOS build/tests ожидаются |
-| Local notes | 🟡 partial | Peer annotation repository и message bookmark notes готовы; editor UI и iOS tests ожидаются |
-| Custom tags | 🟡 partial | Общая нормализация и локальная фильтрация bookmarks/peers готовы; chat/search UI ожидается |
-| Appearance enhancements | ➕ custom — planned | Расширить presentation preferences без поломки themes |
-| Search enhancements | ➕ custom — planned | Объединить локальные результаты с server search |
-| Translation controls | ➕ custom — planned | On-device/system-first, явное согласие для внешних сервисов |
-| Power-user identifiers | ➕ custom — planned | По умолчанию выключено; безопасная выдача ID/debug info |
-| Media enhancements | ➕ custom — planned | Download metadata, batch actions, autoplay/cache controls |
-| Extended offline/storage | ➕ custom — planned | Cache policies, stats, low-storage и reconnect tests |
-| Security redaction | ➕ custom — planned | Запрет sensitive logs и regression tests |
+| Режим призрака: без «прочитано», онлайна, «печатает…», прочих действий, просмотров историй | ⚪ not tested | `TelegramCore/Sources/Monogram/MonogramSettings.swift` (фильтр в `Network.request`), `ManagedAccountPresence`, `ManagedLocalInputActivities`, `SynchronizePeerReadState` |
+| «Прочитано» при ответе и «Прочитать (видно собеседнику)» | ⚪ not tested | `MonogramGhostActions.swift`, `PendingMessageManager`, меню чата в `ChatListUI/ChatContextMenus` |
+| Вход призраком с иконки (долгое нажатие) | ⚪ not tested | `ApplicationShortcutItem.swift`, `AppDelegate` |
+| Сохранение удалённых сообщений (пометка 🗑) | ⚪ not tested | `MonogramMessageAttributes.swift`, `AccountStateManagementUtils` (`DeleteMessages*`), `StringForMessageTimestampStatus` |
+| История изменений сообщений | ⚪ not tested | `MonogramEditHistoryMessageAttribute`, `.EditMessage` replay, `MonogramUI/MonogramEditHistoryController` |
+| Снятие запрета на копирование, пересылка копией | ⚪ not tested | `MonogramCopyProtection.swift`, `Message.isCopyProtected`, `Peer.isCopyProtectionEnabled`, `enqueueMessages` |
+| Скрытие рекламы | ⚪ not tested | `AdMessages.swift`, `AdPeers.swift` |
+| ID, примерная дата регистрации, «Копировать ID сообщения» | ⚪ not tested | `MonogramUI/MonogramPeerInfo.swift`, `PeerInfoProfileItems`, `ChatInterfaceStateContextMenus` |
+| Локальные заметки в профилях | ⚪ not tested | `MonogramPeerNotes` (UserDefaults, per account) |
+| Подтверждение отправки стикеров, GIF, голосовых | ⚪ not tested | `Chat/ChatControllerMonogram.swift`, `ChatController` (sendSticker/sendGif), `dismissMediaRecorder` |
+| Скрытие историй над списком чатов | ⚪ not tested | `ChatListController` |
+
+Не перенесено (нерационально на iOS или уже есть в Telegram-iOS): режим стримера, автозагрузка медиа везде, история изменений профилей, статистика чата, оформление (скругление пузырей есть штатно), очистка файлов.
 
 ## Правило обновления
 

@@ -325,6 +325,11 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         precondition(!testIsLaunched)
         testIsLaunched = true
         
+        // Monogram: a cold launch from the "enter as ghost" shortcut turns the mode on before anything connects.
+        if let shortcutItem = launchOptions?[.shortcutItem] as? UIApplicationShortcutItem {
+            let _ = self.monogramApplyGhostShortcut(shortcutItem)
+        }
+        
         let _ = voipTokenPromise.get().start(next: { token in
             self.voipDeviceToken.set(.single(token))
         })
@@ -1489,7 +1494,10 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                         }
                     } |> mapToSignal { otherAccountName -> Signal<[ApplicationShortcutItem], NoError> in
                         let presentationData = context.context.sharedContext.currentPresentationData.with { $0 }
-                        return .single(applicationShortcutItems(strings: presentationData.strings, otherAccountName: otherAccountName))
+                        return MonogramSettings.value(.ghostMode)
+                        |> map { isGhostModeActive -> [ApplicationShortcutItem] in
+                            return applicationShortcutItems(strings: presentationData.strings, otherAccountName: otherAccountName, isGhostModeActive: isGhostModeActive)
+                        }
                     }
                 } else {
                     return .single([])
@@ -2712,6 +2720,11 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
     
     @available(iOS 9.0, *)
     func application(_ application: UIApplication, performActionFor shortcutItem: UIApplicationShortcutItem, completionHandler: @escaping (Bool) -> Void) {
+        // Monogram: switch ghost mode synchronously, before any online status is reported.
+        if self.monogramApplyGhostShortcut(shortcutItem) {
+            completionHandler(true)
+            return
+        }
         let _ = (self.sharedContextPromise.get()
         |> take(1)
         |> deliverOnMainQueue).start(next: { sharedContext in
@@ -2736,6 +2749,8 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                                     context.switchAccount()
                                 case .appIcon:
                                     context.openAppIcon()
+                                case .ghostOn, .ghostOff:
+                                    break
                             }
                         }
                     }
@@ -2752,6 +2767,19 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
                 proceed()
             }
         })
+    }
+    
+    private func monogramApplyGhostShortcut(_ shortcutItem: UIApplicationShortcutItem) -> Bool {
+        switch ApplicationShortcutItemType(rawValue: shortcutItem.type) {
+        case .ghostOn:
+            MonogramGhost.setActive(true)
+            return true
+        case .ghostOff:
+            MonogramGhost.setActive(false)
+            return true
+        default:
+            return false
+        }
     }
     
     private func openNotificationSettingsWhenReady() {

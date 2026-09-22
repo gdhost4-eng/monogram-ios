@@ -141,7 +141,25 @@ private func actionFromActivity(_ activity: PeerInputActivity?) -> Api.SendMessa
     }
 }
 
+private func monogramGhostBlocksActivity(_ activity: PeerInputActivity?) -> Bool {
+    guard let activity else {
+        // Cancelling an action that was never reported.
+        return MonogramGhost.blocksTyping && MonogramGhost.blocksOtherActions
+    }
+    switch activity {
+    case .typingText:
+        return MonogramGhost.blocksTyping
+    case .speakingInGroupCall:
+        return false
+    default:
+        return MonogramGhost.blocksOtherActions
+    }
+}
+
 private func requestActivity(postbox: Postbox, network: Network, accountPeerId: PeerId, peerId: PeerId, threadId: Int64?, activity: PeerInputActivity?) -> Signal<Void, NoError> {
+    if monogramGhostBlocksActivity(activity) {
+        return .complete()
+    }
     return postbox.transaction { transaction -> Signal<Void, NoError> in
         if let peer = transaction.getPeer(peerId) {
             if peerId == accountPeerId {

@@ -93,6 +93,11 @@ public extension TelegramEngine {
             self.account = account
         }
 
+        /// Monogram: "read for real" — marks the chat read for the other side even in ghost mode.
+        public func monogramReadHistoryVisibly(peerId: EnginePeer.Id) -> Signal<Never, NoError> {
+            return _internal_monogramReadHistoryVisibly(postbox: self.account.postbox, network: self.account.network, stateManager: self.account.stateManager, peerId: peerId)
+        }
+
         public func clearCloudDraftsInteractively() -> Signal<Void, NoError> {
         	return _internal_clearCloudDraftsInteractively(postbox: self.account.postbox, network: self.account.network, accountPeerId: self.account.peerId)
         }

@@ -16,6 +16,8 @@ import WebUI
 import AvatarNode
 import PeerNameColorItem
 import BoostLevelIconComponent
+import MonogramUI
+import UndoUI
 
 private let enabledPublicBioEntities: EnabledEntityTypes = [.allUrl, .mention, .hashtag]
 private let enabledPrivateBioEntities: EnabledEntityTypes = [.internalUrl, .mention, .hashtag]
@@ -845,6 +847,40 @@ func infoItems(
                     interaction.requestLayout(animated)
                 }))
             }
+        }
+    }
+    
+    // Monogram: peer id, approximate registration date and the local note.
+    if let peer = data.peer, !isMyProfile, peer.id != context.account.peerId {
+        let peerId = peer.id
+        if MonogramSettings.get(.showPeerIds) {
+            let idText = monogramPeerIdString(peerId)
+            items[.peerInfoTrailing]!.append(PeerInfoScreenLabeledValueItem(id: "monogram_id", label: "ID", text: idText, textColor: .primary, action: { _, _ in
+                UIPasteboard.general.string = idText
+                if let controller = interaction.getController() {
+                    let presentationData = context.sharedContext.currentPresentationData.with { $0 }
+                    controller.present(UndoOverlayController(presentationData: presentationData, content: .copy(text: "ID скопирован"), elevatedLayout: false, action: { _ in
+                        return false
+                    }), in: .current)
+                }
+            }, requestLayout: { animated in
+                interaction.requestLayout(animated)
+            }))
+            if case .user = peer, let registrationText = monogramApproximateRegistrationText(userId: peerId) {
+                items[.peerInfoTrailing]!.append(PeerInfoScreenLabeledValueItem(id: "monogram_registration", label: "Регистрация (примерно)", text: registrationText, textColor: .primary, action: nil, requestLayout: { animated in
+                    interaction.requestLayout(animated)
+                }))
+            }
+        }
+        if MonogramSettings.get(.localNotes) {
+            let note = MonogramPeerNotes.note(accountPeerId: context.account.peerId, peerId: peerId)
+            items[.peerInfoTrailing]!.append(PeerInfoScreenLabeledValueItem(id: "monogram_note", label: "Локальная заметка", text: note ?? "Добавить заметку", textColor: note == nil ? .accent : .primary, textBehavior: .multiLine(maxLines: 100, enabledEntities: []), action: { _, _ in
+                interaction.getController()?.present(monogramPeerNoteEditorController(context: context, peerId: peerId, completion: {
+                    interaction.requestLayout(true)
+                }), in: .window(.root))
+            }, requestLayout: { animated in
+                interaction.requestLayout(animated)
+            }))
         }
     }
     

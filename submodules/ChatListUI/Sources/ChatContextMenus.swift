@@ -379,6 +379,15 @@ func chatContextMenuItems(context: AccountContext, peerId: EnginePeer.Id, promoI
                                     })))
                                 }
                             }
+                            
+                            // Monogram: in ghost mode chats are read only locally; this sends a real read receipt.
+                            if MonogramGhost.blocksReadReceipts && !isForum && peerId.namespace != Namespaces.Peer.SecretChat {
+                                items.append(.action(ContextMenuActionItem(text: "Прочитать (видно собеседнику)", icon: { theme in generateTintedImage(image: UIImage(bundleImageName: "Chat/Context Menu/MarkAsRead"), color: theme.contextMenu.primaryColor) }, action: { _, f in
+                                    let _ = (context.engine.messages.togglePeersUnreadMarkInteractively(peerIds: [peerId], setToValue: false)
+                                    |> then(context.engine.messages.monogramReadHistoryVisibly(peerId: peerId))).startStandalone()
+                                    f(.default)
+                                })))
+                            }
                         }
                         
                         let archiveEnabled = !isSavedMessages && peerId != EnginePeer.Id(namespace: Namespaces.Peer.CloudUser, id: EnginePeer.Id.Id._internalFromInt64Value(777000)) && peerId == context.account.peerId

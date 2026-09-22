@@ -109,6 +109,7 @@ swift_library(
         "//submodules/TelegramBaseController",
         "//submodules/TelegramCallsUI",
         "//submodules/TelegramCore",
+        "//submodules/MonogramUI",
         "//submodules/TelegramIntents",
         "//submodules/TelegramNotices",
         "//submodules/TelegramPresentationData",

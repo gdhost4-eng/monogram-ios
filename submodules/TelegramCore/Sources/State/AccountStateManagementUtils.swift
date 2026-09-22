@@ -4441,18 +4441,29 @@ func replayFinalState(
                 }
             case let .DeleteMessagesWithGlobalIds(ids):
                 var resourceIds: [MediaResourceId] = []
-                transaction.deleteMessagesWithGlobalIds(ids, forEachMedia: { media in
-                    addMessageMediaResourceIdsToRemove(media: media, resourceIds: &resourceIds)
-                })
+                if MonogramSettings.get(.saveDeletedMessages) {
+                    // Monogram: keep what the other side deleted, marked as deleted.
+                    let remainingIds = monogramKeepDeletedMessages(transaction: transaction, ids: transaction.messageIdsForGlobalIds(ids))
+                    transaction.deleteMessages(remainingIds, forEachMedia: { media in
+                        addMessageMediaResourceIdsToRemove(media: media, resourceIds: &resourceIds)
+                    })
+                    deletedMessageIds.append(contentsOf: remainingIds.map { .messageId($0) })
+                } else {
+                    transaction.deleteMessagesWithGlobalIds(ids, forEachMedia: { media in
+                        addMessageMediaResourceIdsToRemove(media: media, resourceIds: &resourceIds)
+                    })
+                    deletedMessageIds.append(contentsOf: ids.map { .global($0) })
+                }
                 if !resourceIds.isEmpty {
                     let _ = mediaBox.removeCachedResources(Array(Set(resourceIds)), force: true).start()
                 }
-                deletedMessageIds.append(contentsOf: ids.map { .global($0) })
             case let .DeleteMessages(ids):
-                _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: ids, manualAddMessageThreadStatsDifference: { id, add, remove in
+                // Monogram: keep what the other side deleted, marked as deleted.
+                let remainingIds = monogramKeepDeletedMessages(transaction: transaction, ids: ids)
+                _internal_deleteMessages(transaction: transaction, mediaBox: mediaBox, ids: remainingIds, manualAddMessageThreadStatsDifference: { id, add, remove in
                     addMessageThreadStatsDifference(threadKey: id, remove: remove, addedMessagePeer: nil, addedMessageId: nil, isOutgoing: false)
                 })
-                deletedMessageIds.append(contentsOf: ids.map { .messageId($0) })
+                deletedMessageIds.append(contentsOf: remainingIds.map { .messageId($0) })
             case let .UpdateMinAvailableMessage(id):
                 if let message = transaction.getMessage(id) {
                     updatePeerChatInclusionWithMinTimestamp(transaction: transaction, id: id.peerId, minTimestamp: message.timestamp, forceRootGroupIfNotExists: false)
@@ -4531,6 +4542,9 @@ func replayFinalState(
                     if let previousPaidContent = previousMessage.media.first(where: { $0 is TelegramMediaPaidContent }) as? TelegramMediaPaidContent, case .full = previousPaidContent.extendedMedia.first {
                         updatedMedia = previousMessage.media
                     }
+                    
+                    // Monogram: remember the previous text and keep local markers.
+                    updatedAttributes = monogramAttributesForEdit(previousMessage: previousMessage, updatedText: message.text, updatedAttributes: updatedAttributes)
                     
                     return .update(message.withUpdatedLocalTags(updatedLocalTags).withUpdatedFlags(updatedFlags).withUpdatedAttributes(updatedAttributes).withUpdatedMedia(updatedMedia))
                 })
