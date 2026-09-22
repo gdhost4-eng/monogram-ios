@@ -13,6 +13,8 @@ jobs:
   build:
     # versions.json pins Xcode 26.2, which is available on the macOS 26 image.
     runs-on: macos-26
+    # A cold build takes 1.5-4h; the GitHub job ceiling is 6h.
+    timeout-minutes: 350
 
     steps:
       - uses: actions/checkout@v4
@@ -51,6 +53,14 @@ jobs:
           cp -R $GITHUB_WORKSPACE /Users/Shared/
           mv /Users/Shared/$(basename $GITHUB_WORKSPACE) /Users/Shared/telegram-ios
 
+      - name: Restore Bazel disk cache
+        uses: actions/cache/restore@v4
+        with:
+          path: /Users/Shared/bazel-disk-cache
+          key: bazel-disk-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            bazel-disk-${{ runner.os }}-
+
       - name: Build the IPA
         run: |
           set -x
@@ -75,12 +85,64 @@ jobs:
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
           python3 -u build-system/Make/Make.py \
             --bazelUserRoot="$BAZEL_USER_ROOT" \
+            --cacheDir=/Users/Shared/bazel-disk-cache \
             build \
             --configurationPath="build-system/monogram-development-configuration.json" \
             --codesigningInformationPath=build-system/fake-codesigning \
             --configuration=release_arm64 \
             --buildNumber="$BUILD_NUMBER" \
             --outputBuildArtifactsPath=build
+
+      - name: Prune Bazel disk cache
+        if: success()
+        run: |
+          # The Actions cache allows 10 GB per repository in total, while a full Bazel
+          # disk cache for this project is considerably larger. Keep the most recently
+          # used entries under a budget so the upload is accepted rather than rejected.
+          python3 - <<'PY'
+          import os
+
+          CACHE_DIR = "/Users/Shared/bazel-disk-cache"
+          BUDGET = 8 * 1024 ** 3
+
+          if not os.path.isdir(CACHE_DIR):
+              raise SystemExit(0)
+
+          entries = []
+          for root, _dirs, files in os.walk(CACHE_DIR):
+              for name in files:
+                  path = os.path.join(root, name)
+                  try:
+                      stat = os.stat(path)
+                  except OSError:
+                      continue
+                  entries.append((stat.st_mtime, stat.st_size, path))
+
+          total = sum(size for _mtime, size, _path in entries)
+          print("Cache size before pruning: {:.2f} GB ({} files)".format(total / 1024 ** 3, len(entries)))
+
+          entries.sort(reverse=True)
+          kept = 0
+          removed = 0
+          for _mtime, size, path in entries:
+              if kept + size <= BUDGET:
+                  kept += size
+              else:
+                  try:
+                      os.remove(path)
+                      removed += 1
+                  except OSError:
+                      kept += size
+
+          print("Cache size after pruning: {:.2f} GB ({} files removed)".format(kept / 1024 ** 3, removed))
+          PY
+
+      - name: Save Bazel disk cache
+        if: success()
+        uses: actions/cache/save@v4
+        with:
+          path: /Users/Shared/bazel-disk-cache
+          key: bazel-disk-${{ runner.os }}-${{ github.sha }}
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
