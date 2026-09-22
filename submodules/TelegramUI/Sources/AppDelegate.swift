@@ -290,7 +290,9 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
         let appGroupName = "group.\(baseAppBundleId)"
 
         let configuration = URLSessionConfiguration.background(withIdentifier: identifier)
-        configuration.sharedContainerIdentifier = appGroupName
+        if FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupName) != nil {
+            configuration.sharedContainerIdentifier = appGroupName
+        }
         configuration.isDiscretionary = false
         let session = URLSession(configuration: configuration, delegate: self, delegateQueue: .main)
         self.urlSessions.append(session)
@@ -646,9 +648,20 @@ private func extractAccountManagerState(records: AccountRecordsView<TelegramAcco
             isICloudEnabled: buildConfig.isICloudEnabled
         )
         
-        guard let appGroupUrl = maybeAppGroupUrl else {
-            self.mainWindow?.presentNative(UIAlertController(title: nil, message: "Error 2", preferredStyle: .alert))
-            return true
+        let appGroupUrl: URL
+        if let maybeAppGroupUrl {
+            appGroupUrl = maybeAppGroupUrl
+        } else {
+            // Sideloading services can re-sign the application without preserving the App Groups
+            // entitlement. The main application then keeps its data in its private sandbox.
+            let fallbackUrl = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Monogram", isDirectory: true)
+            do {
+                try FileManager.default.createDirectory(at: fallbackUrl, withIntermediateDirectories: true)
+                appGroupUrl = fallbackUrl
+            } catch {
+                self.mainWindow?.presentNative(UIAlertController(title: nil, message: "Error 2", preferredStyle: .alert))
+                return true
+            }
         }
         
         var isDebugConfiguration = false
