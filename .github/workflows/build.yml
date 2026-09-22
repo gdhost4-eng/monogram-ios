@@ -126,6 +126,7 @@ jobs:
             --bazelUserRoot="$BAZEL_USER_ROOT" \
             --cacheDir=/Users/Shared/bazel-disk-cache \
             build \
+            --continueOnError \
             --configurationPath="build-system/monogram-development-configuration.json" \
             --codesigningInformationPath=build-system/generated-codesigning \
             --configuration=release_arm64 \

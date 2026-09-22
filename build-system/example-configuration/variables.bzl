@@ -1,6 +1,7 @@
 
 telegram_bundle_id = "ph.telegra.Telegraph"
 telegram_api_id = "8"
+telegram_api_hash = ""
 
 telegram_team_id = "C67CF9S4VU"
 telegram_app_center_id = "0"
