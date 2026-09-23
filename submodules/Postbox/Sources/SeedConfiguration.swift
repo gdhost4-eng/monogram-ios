@@ -74,6 +74,9 @@ public final class SeedConfiguration {
     public let getGlobalNotificationSettings: (Transaction) -> PostboxGlobalNotificationSettings?
     public let defaultGlobalNotificationSettings: PostboxGlobalNotificationSettings
     public let mergeMessageAttributes: ([MessageAttribute], inout [MessageAttribute]) -> Void
+    /// Called when a message that is already stored is written again: `updatedMedia` is what is about to be
+    /// stored, `previousMedia` lazily reads what is stored now. Returns the media to store instead, or nil.
+    public let preserveExistingMessageMedia: (_ updatedMedia: [Media], _ previousMedia: () -> [Media]) -> [Media]?
     public let decodeMessageThreadInfo: (CodableEntry) -> Message.AssociatedThreadInfo?
     public let decodeAutoremoveTimeout: (CachedPeerData) -> Int32?
     public let decodeDisplayPeerAsRegularChat: (CachedPeerData) -> Bool
@@ -105,6 +108,7 @@ public final class SeedConfiguration {
         getGlobalNotificationSettings: @escaping (Transaction) -> PostboxGlobalNotificationSettings?,
         defaultGlobalNotificationSettings: PostboxGlobalNotificationSettings,
         mergeMessageAttributes: @escaping ([MessageAttribute], inout [MessageAttribute]) -> Void,
+        preserveExistingMessageMedia: @escaping (_ updatedMedia: [Media], _ previousMedia: () -> [Media]) -> [Media]?,
         decodeMessageThreadInfo: @escaping (CodableEntry) -> Message.AssociatedThreadInfo?,
         decodeAutoremoveTimeout: @escaping (CachedPeerData) -> Int32?,
         decodeDisplayPeerAsRegularChat: @escaping (CachedPeerData) -> Bool,
@@ -131,6 +135,7 @@ public final class SeedConfiguration {
         self.getGlobalNotificationSettings = getGlobalNotificationSettings
         self.defaultGlobalNotificationSettings = defaultGlobalNotificationSettings
         self.mergeMessageAttributes = mergeMessageAttributes
+        self.preserveExistingMessageMedia = preserveExistingMessageMedia
         self.decodeMessageThreadInfo = decodeMessageThreadInfo
         self.decodeAutoremoveTimeout = decodeAutoremoveTimeout
         self.decodeDisplayPeerAsRegularChat = decodeDisplayPeerAsRegularChat

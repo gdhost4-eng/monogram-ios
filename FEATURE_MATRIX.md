@@ -48,6 +48,7 @@
 | Вход призраком с иконки (долгое нажатие) | ⚪ not tested | `ApplicationShortcutItem.swift`, `AppDelegate` |
 | Сохранение удалённых сообщений (пометка 🗑) | ⚪ not tested | `MonogramMessageAttributes.swift`, `AccountStateManagementUtils` (`DeleteMessages*`), `StringForMessageTimestampStatus` |
 | История изменений сообщений | ⚪ not tested | `MonogramEditHistoryMessageAttribute`, `.EditMessage` replay, `MonogramUI/MonogramEditHistoryController` |
+| Сохранение одноразовых медиа и медиа с таймером (в т.ч. секретные чаты) | ⚪ not tested | `MonogramSelfDestructingMedia.swift`: хук Postbox `SeedConfiguration.preserveExistingMessageMedia` (не даёт затереть медиа заглушкой `TelegramMediaExpiredContent`), предзагрузка при получении в `AccountStateManagementUtils`, `ManagedAutoremoveMessageOperations` (секретные чаты) |
 | Снятие запрета на копирование, пересылка копией | ⚪ not tested | `MonogramCopyProtection.swift`, `Message.isCopyProtected`, `Peer.isCopyProtectionEnabled`, `enqueueMessages` |
 | Скрытие рекламы | ⚪ not tested | `AdMessages.swift`, `AdPeers.swift` |
 | ID, примерная дата регистрации, «Копировать ID сообщения» | ⚪ not tested | `MonogramUI/MonogramPeerInfo.swift`, `PeerInfoProfileItems`, `ChatInterfaceStateContextMenus` |

@@ -21,6 +21,7 @@ public final class MonogramSettings {
         // Keeping what the other side tries to take back.
         case saveDeletedMessages
         case saveEditHistory
+        case saveSelfDestructingMedia
         case bypassCopyProtection
 
         // Asking before a send that is easy to do by accident.
@@ -40,7 +41,7 @@ public final class MonogramSettings {
                 return false
             case .ghostNoReadMessages, .ghostNoOnline, .ghostNoTyping, .ghostNoOtherActions, .ghostNoStoryViews:
                 return true
-            case .saveDeletedMessages, .saveEditHistory, .bypassCopyProtection:
+            case .saveDeletedMessages, .saveEditHistory, .saveSelfDestructingMedia, .bypassCopyProtection:
                 return true
             case .confirmStickers, .confirmGifs, .confirmVoice:
                 return false

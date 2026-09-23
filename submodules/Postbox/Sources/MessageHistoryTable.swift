@@ -434,7 +434,16 @@ final class MessageHistoryTable: Table {
         for message in messages {
             switch message.id {
             case let .Id(id):
-                internalStoreMessages.append(InternalStoreMessage(id: id, customStableId: message.customStableId, timestamp: message.timestamp, globallyUniqueId: message.globallyUniqueId, groupingKey: message.groupingKey, threadId: message.threadId, flags: message.flags, tags: message.tags, globalTags: message.globalTags, localTags: message.localTags, customTags: self.seedConfiguration.customTagsFromAttributes(message.attributes), forwardInfo: message.forwardInfo, authorId: message.authorId, text: message.text, attributes: message.attributes, media: message.media))
+                var media = message.media
+                if let preservedMedia = self.seedConfiguration.preserveExistingMessageMedia(media, {
+                    guard let index = self.messageHistoryIndexTable.getIndex(id), let previousMessage = self.getMessage(index) else {
+                        return []
+                    }
+                    return self.renderMessageMedia(referencedMedia: previousMessage.referencedMedia, embeddedMediaData: previousMessage.embeddedMediaData)
+                }) {
+                    media = preservedMedia
+                }
+                internalStoreMessages.append(InternalStoreMessage(id: id, customStableId: message.customStableId, timestamp: message.timestamp, globallyUniqueId: message.globallyUniqueId, groupingKey: message.groupingKey, threadId: message.threadId, flags: message.flags, tags: message.tags, globalTags: message.globalTags, localTags: message.localTags, customTags: self.seedConfiguration.customTagsFromAttributes(message.attributes), forwardInfo: message.forwardInfo, authorId: message.authorId, text: message.text, attributes: message.attributes, media: media))
             case let .Partial(peerId, namespace):
                 let id = self.historyMetadataTable.getNextMessageIdAndIncrement(peerId, namespace: namespace)
                 internalStoreMessages.append(InternalStoreMessage(id: id, customStableId: message.customStableId, timestamp: message.timestamp, globallyUniqueId: message.globallyUniqueId, groupingKey: message.groupingKey, threadId: message.threadId, flags: message.flags, tags: message.tags, globalTags: message.globalTags, localTags: message.localTags, customTags: self.seedConfiguration.customTagsFromAttributes(message.attributes), forwardInfo: message.forwardInfo, authorId: message.authorId, text: message.text, attributes: message.attributes, media: message.media))

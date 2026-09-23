@@ -177,6 +177,9 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
                 }
             }
         },
+        preserveExistingMessageMedia: { updatedMedia, previousMedia in
+            return monogramPreservedSelfDestructingMedia(updatedMedia: updatedMedia, previousMedia: previousMedia)
+        },
         decodeMessageThreadInfo: { entry in
             guard let data = entry.get(MessageHistoryThreadData.self) else {
                 return nil

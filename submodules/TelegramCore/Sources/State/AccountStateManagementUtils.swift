@@ -4258,6 +4258,8 @@ func replayFinalState(
                 }
             
                 let _ = transaction.addMessages(messages, location: location)
+                // Monogram: download self-destructing media while the server still gives it out.
+                monogramPrefetchSelfDestructingMedia(transaction: transaction, mediaBox: mediaBox, messages: messages)
                 if case .UpperHistoryBlock = location {
                     for message in messages {
                         let chatPeerId = message.id.peerId
