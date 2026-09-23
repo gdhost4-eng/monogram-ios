@@ -4,8 +4,9 @@ import TelegramCore
 import TelegramUIPreferences
 import AccountContext
 
-public let maximumNumberOfAccounts = 3
-public let maximumPremiumNumberOfAccounts = 4
+// Monogram does not impose an application-level limit on the number of accounts.
+public let maximumNumberOfAccounts = Int.max
+public let maximumPremiumNumberOfAccounts = Int.max
 
 public func activeAccountsAndPeers(context: AccountContext, includePrimary: Bool = false) -> Signal<((AccountContext, EnginePeer)?, [(AccountContext, EnginePeer, Int32)]), NoError> {
     let sharedContext = context.sharedContext
