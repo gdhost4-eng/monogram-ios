@@ -338,6 +338,36 @@ static _FormattedString * _Nonnull getFormatted{num_arguments}(_PresentationStri
 
 @end
 
+// Monogram: the app is called Monogram, so every UI string (bundled English and
+// server-provided language packs alike) shows that name instead of "Telegram".
+// Names of Telegram services (Premium, Stars, Business…), @usernames and
+// domains stay untouched.
+static NSDictionary<NSString *, NSString *> * _Nonnull monogramBrandedDict(NSDictionary<NSString *, NSString *> * _Nullable dict) {
+    if (dict == nil) {
+        return @{};
+    }
+    static NSRegularExpression *regex = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        regex = [NSRegularExpression regularExpressionWithPattern:@"(?<![@/\\\\.\\\\w])Telegram(?![\\\\w]|\\\\.[a-z]|\\\\s+(?:Premium|Stars|Business|Gateway|Passport|Ads|Fragment|Wallet|Gifts?|Support|FAQ|API|Terms|Privacy|Desktop|Web|X\\\\b|Mini))" options:0 error:nil];
+    });
+    NSMutableDictionary<NSString *, NSString *> *result = nil;
+    for (NSString *key in dict) {
+        NSString *value = dict[key];
+        if (![value isKindOfClass:[NSString class]] || [value rangeOfString:@"Telegram"].location == NSNotFound) {
+            continue;
+        }
+        NSString *branded = [regex stringByReplacingMatchesInString:value options:0 range:NSMakeRange(0, value.length) withTemplate:@"Monogram"];
+        if (![branded isEqualToString:value]) {
+            if (result == nil) {
+                result = [dict mutableCopy];
+            }
+            result[key] = branded;
+        }
+    }
+    return result != nil ? result : dict;
+}
+
 @implementation _PresentationStringsComponent
 
 - (instancetype _Nonnull)initWithLanguageCode:(NSString * _Nonnull)languageCode
@@ -349,7 +379,7 @@ static _FormattedString * _Nonnull getFormatted{num_arguments}(_PresentationStri
         _languageCode = languageCode;
         _localizedName = localizedName;
         _pluralizationRulesCode = pluralizationRulesCode;
-        _dict = dict;
+        _dict = monogramBrandedDict(dict);
     }
     return self;
 }
@@ -470,7 +500,7 @@ static NSString * _Nonnull getSingle(_PresentationStrings * _Nullable strings, N
             if (!stringsPath) {
                 return;
             }
-            fallbackDict = [NSDictionary dictionaryWithContentsOfURL:[NSURL fileURLWithPath:stringsPath]];
+            fallbackDict = monogramBrandedDict([NSDictionary dictionaryWithContentsOfURL:[NSURL fileURLWithPath:stringsPath]]);
         });
         result = fallbackDict[key]; 
     }
