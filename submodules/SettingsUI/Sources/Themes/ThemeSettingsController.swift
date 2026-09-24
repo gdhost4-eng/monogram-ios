@@ -482,10 +482,11 @@ private func themeSettingsControllerEntries(
     entries.append(.powerSaving)
     entries.append(.stickersAndEmoji)
     
-    if !availableAppIcons.isEmpty {
-        entries.append(.iconHeader(presentationData.theme, strings.Appearance_AppIcon.uppercased()))
-        entries.append(.iconItem(presentationData.theme, presentationData.strings, availableAppIcons, isPremium, currentAppIconName))
-    }
+    // Monogram: скрываем выбор иконки приложения, чтобы случайно не заменить иконку Monogram.
+    // if !availableAppIcons.isEmpty {
+    //     entries.append(.iconHeader(presentationData.theme, strings.Appearance_AppIcon.uppercased()))
+    //     entries.append(.iconItem(presentationData.theme, presentationData.strings, availableAppIcons, isPremium, currentAppIconName))
+    // }
     
     entries.append(.otherHeader(presentationData.theme, strings.Appearance_Other.uppercased()))
     if DeviceModel.current.isIpad {
