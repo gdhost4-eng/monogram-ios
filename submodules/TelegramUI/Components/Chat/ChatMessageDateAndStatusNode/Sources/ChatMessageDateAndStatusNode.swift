@@ -14,10 +14,11 @@ import MultiAnimationRenderer
 import TelegramStringFormatting
 
 // Monogram: trash icon for deleted messages, same glyph as in Monogram for desktop (12x12 viewBox).
-private let monogramDeletedIconCache = Atomic<[CGFloat: UIImage]>(value: [:])
+private let monogramDeletedIconCache = Atomic<[String: UIImage]>(value: [:])
 
-private func monogramDeletedIcon(size: CGFloat) -> UIImage? {
-    if let image = monogramDeletedIconCache.with({ $0[size] }) {
+private func monogramDeletedIcon(size: CGFloat, color: UIColor) -> UIImage? {
+    let cacheKey = "\(size)-\(color.argb)"
+    if let image = monogramDeletedIconCache.with({ $0[cacheKey] }) {
         return image
     }
     let image = generateImage(CGSize(width: size, height: size), rotatedContext: { contextSize, context in
@@ -54,70 +55,17 @@ private func monogramDeletedIcon(size: CGFloat) -> UIImage? {
         path.addRect(CGRect(x: 6.7, y: 5.2, width: 0.9, height: 4.6))
         
         context.addPath(path)
-        context.setFillColor(UIColor.white.cgColor)
+        context.setFillColor(color.cgColor)
         context.fillPath(using: .evenOdd)
     })
     if let image {
         let _ = monogramDeletedIconCache.modify { current in
             var current = current
-            current[size] = image
+            current[cacheKey] = image
             return current
         }
     }
     return image
-}
-
-private final class MonogramIconRunDelegateData {
-    let ascent: CGFloat
-    let descent: CGFloat
-    let width: CGFloat
-    
-    init(ascent: CGFloat, descent: CGFloat, width: CGFloat) {
-        self.ascent = ascent
-        self.descent = descent
-        self.width = width
-    }
-}
-
-/// Replaces the deleted-message marker in the date text with a tinted trash icon.
-private func monogramDateAttributedString(_ text: String, font: UIFont, textColor: UIColor) -> NSAttributedString {
-    guard let markerRange = text.range(of: monogramDeletedDateMarker) else {
-        return NSAttributedString(string: text, font: font, textColor: textColor)
-    }
-    let iconSize = floor(font.pointSize)
-    guard let icon = monogramDeletedIcon(size: iconSize) else {
-        return NSAttributedString(string: text, font: font, textColor: textColor)
-    }
-    
-    var callbacks = CTRunDelegateCallbacks(
-        version: kCTRunDelegateCurrentVersion,
-        dealloc: { dataRef in
-            Unmanaged<MonogramIconRunDelegateData>.fromOpaque(dataRef).release()
-        },
-        getAscent: { dataRef in
-            return Unmanaged<MonogramIconRunDelegateData>.fromOpaque(dataRef).takeUnretainedValue().ascent
-        },
-        getDescent: { dataRef in
-            return Unmanaged<MonogramIconRunDelegateData>.fromOpaque(dataRef).takeUnretainedValue().descent
-        },
-        getWidth: { dataRef in
-            return Unmanaged<MonogramIconRunDelegateData>.fromOpaque(dataRef).takeUnretainedValue().width
-        }
-    )
-    let runDelegateData = MonogramIconRunDelegateData(ascent: font.ascender, descent: font.descender, width: icon.size.width)
-    guard let runDelegate = CTRunDelegateCreate(&callbacks, Unmanaged.passRetained(runDelegateData).toOpaque()) else {
-        return NSAttributedString(string: text, font: font, textColor: textColor)
-    }
-    
-    let result = NSMutableAttributedString()
-    result.append(NSAttributedString(string: String(text[text.startIndex ..< markerRange.lowerBound]), font: font, textColor: textColor))
-    result.append(NSAttributedString(string: ">", attributes: [
-        .attachment: icon,
-        .foregroundColor: textColor,
-        NSAttributedString.Key(rawValue: kCTRunDelegateAttributeName as String): runDelegate
-    ]))
-    result.append(NSAttributedString(string: " " + String(text[markerRange.upperBound...]), font: font, textColor: textColor))
-    return result
 }
 
 private func maybeAddRotationAnimation(_ layer: CALayer, duration: Double) {
@@ -371,6 +319,7 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
     private var clockFrameNode: ASImageNode?
     private var clockMinNode: ASImageNode?
     private let dateNode: TextNode
+    private var monogramDeletedIconNode: ASImageNode?
     private var impressionIcon: ASImageNode?
     private var reactionNodes: [MessageReaction.Reaction: StatusReactionNode] = [:]
     private let reactionButtonsContainer = ReactionButtonsAsyncLayoutContainer()
@@ -656,7 +605,20 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             }
             
             let dateFont = Font.regular(floor(arguments.presentationData.fontSize.baseDisplaySize * 11.0 / 17.0))
-            let (date, dateApply) = dateLayout(TextNodeLayoutArguments(attributedString: monogramDateAttributedString(updatedDateText, font: dateFont, textColor: dateColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .middle, constrainedSize: arguments.constrainedSize, alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
+            
+            // Monogram: the deleted marker becomes a gap in the text, and a trash icon is drawn over it.
+            var monogramDeletedIconImage: UIImage?
+            var monogramDeletedIconOffset: CGFloat = 0.0
+            if let markerRange = updatedDateText.range(of: monogramDeletedDateMarker) {
+                let prefix = String(updatedDateText[updatedDateText.startIndex ..< markerRange.lowerBound])
+                if !prefix.isEmpty {
+                    monogramDeletedIconOffset = ceil((prefix as NSString).size(withAttributes: [.font: dateFont]).width)
+                }
+                updatedDateText.replaceSubrange(markerRange, with: "\u{2003} ")
+                monogramDeletedIconImage = monogramDeletedIcon(size: floor(dateFont.pointSize), color: dateColor)
+            }
+            
+            let (date, dateApply) = dateLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: updatedDateText, font: dateFont, textColor: dateColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .middle, constrainedSize: arguments.constrainedSize, alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
             
             let checkOffset = floor(arguments.presentationData.fontSize.baseDisplaySize * 6.0 / 17.0)
             
@@ -1220,6 +1182,25 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                         }
                         
                         animation.animator.updateFrame(layer: strongSelf.dateNode.layer, frame: CGRect(origin: CGPoint(x: leftOffset + leftInset + backgroundInsets.left + impressionWidth, y: backgroundInsets.top + 1.0 + offset + verticalInset), size: date.size), completion: nil)
+                        
+                        if let monogramDeletedIconImage {
+                            let iconNode: ASImageNode
+                            if let current = strongSelf.monogramDeletedIconNode {
+                                iconNode = current
+                            } else {
+                                iconNode = ASImageNode()
+                                iconNode.isLayerBacked = true
+                                iconNode.displaysAsynchronously = false
+                                iconNode.displayWithoutProcessing = true
+                                strongSelf.monogramDeletedIconNode = iconNode
+                                strongSelf.dateNode.addSubnode(iconNode)
+                            }
+                            iconNode.image = monogramDeletedIconImage
+                            iconNode.frame = CGRect(origin: CGPoint(x: monogramDeletedIconOffset, y: floor((date.size.height - monogramDeletedIconImage.size.height) / 2.0)), size: monogramDeletedIconImage.size)
+                        } else if let iconNode = strongSelf.monogramDeletedIconNode {
+                            strongSelf.monogramDeletedIconNode = nil
+                            iconNode.removeFromSupernode()
+                        }
                         
                         if let clockFrameNode = clockFrameNode {
                             let clockPosition = CGPoint(x: leftOffset + backgroundInsets.left + clockPosition.x + reactionInset, y: backgroundInsets.top + clockPosition.y + verticalInset)

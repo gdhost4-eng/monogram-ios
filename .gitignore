@@ -87,3 +87,6 @@ xcode-files
 tools/sim-watcher/dist/
 .mcp.json
 build-system/generated-codesigning/
+
+# Local Codex worktrees
+.codex-worktrees/
