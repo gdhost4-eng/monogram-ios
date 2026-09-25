@@ -61,6 +61,9 @@ private func monthAtIndex(_ index: Int, strings: PresentationStrings) -> String 
     }
 }
 
+/// Monogram: prefix of a deleted message's date. Chat bubbles replace it with a trash icon.
+public let monogramDeletedDateMarker = "🗑 "
+
 public func stringForMessageTimestampStatus(
     context: AccountContext,
     message: EngineMessage,
@@ -184,7 +187,7 @@ public func stringForMessageTimestampStatus(
     
     if message.monogramIsDeleted {
         // Monogram: deleted on the server, kept locally.
-        dateText = "🗑 " + dateText
+        dateText = monogramDeletedDateMarker + dateText
     }
     
     var authorTitle: String?

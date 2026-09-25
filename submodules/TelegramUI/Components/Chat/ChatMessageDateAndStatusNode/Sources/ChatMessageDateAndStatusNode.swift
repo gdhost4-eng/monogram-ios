@@ -13,6 +13,113 @@ import AnimationCache
 import MultiAnimationRenderer
 import TelegramStringFormatting
 
+// Monogram: trash icon for deleted messages, same glyph as in Monogram for desktop (12x12 viewBox).
+private let monogramDeletedIconCache = Atomic<[CGFloat: UIImage]>(value: [:])
+
+private func monogramDeletedIcon(size: CGFloat) -> UIImage? {
+    if let image = monogramDeletedIconCache.with({ $0[size] }) {
+        return image
+    }
+    let image = generateImage(CGSize(width: size, height: size), rotatedContext: { contextSize, context in
+        context.clear(CGRect(origin: CGPoint(), size: contextSize))
+        let scale = contextSize.width / 12.0
+        context.scaleBy(x: scale, y: scale)
+        
+        let path = CGMutablePath()
+        // Lid with handle.
+        path.move(to: CGPoint(x: 4.5, y: 0.8))
+        path.addLine(to: CGPoint(x: 7.5, y: 0.8))
+        path.addCurve(to: CGPoint(x: 8.2, y: 1.5), control1: CGPoint(x: 7.9, y: 0.8), control2: CGPoint(x: 8.2, y: 1.1))
+        path.addLine(to: CGPoint(x: 8.2, y: 2.0))
+        path.addLine(to: CGPoint(x: 10.6, y: 2.0))
+        path.addCurve(to: CGPoint(x: 11.1, y: 2.5), control1: CGPoint(x: 10.9, y: 2.0), control2: CGPoint(x: 11.1, y: 2.2))
+        path.addCurve(to: CGPoint(x: 10.6, y: 3.0), control1: CGPoint(x: 11.1, y: 2.8), control2: CGPoint(x: 10.9, y: 3.0))
+        path.addLine(to: CGPoint(x: 1.4, y: 3.0))
+        path.addCurve(to: CGPoint(x: 0.9, y: 2.5), control1: CGPoint(x: 1.1, y: 3.0), control2: CGPoint(x: 0.9, y: 2.8))
+        path.addCurve(to: CGPoint(x: 1.4, y: 2.0), control1: CGPoint(x: 0.9, y: 2.2), control2: CGPoint(x: 1.1, y: 2.0))
+        path.addLine(to: CGPoint(x: 3.8, y: 2.0))
+        path.addLine(to: CGPoint(x: 3.8, y: 1.5))
+        path.addCurve(to: CGPoint(x: 4.5, y: 0.8), control1: CGPoint(x: 3.8, y: 1.1), control2: CGPoint(x: 4.1, y: 0.8))
+        path.closeSubpath()
+        // Body.
+        path.move(to: CGPoint(x: 2.0, y: 3.8))
+        path.addLine(to: CGPoint(x: 10.0, y: 3.8))
+        path.addLine(to: CGPoint(x: 9.4, y: 10.4))
+        path.addCurve(to: CGPoint(x: 8.4, y: 11.2), control1: CGPoint(x: 9.35, y: 10.9), control2: CGPoint(x: 8.9, y: 11.2))
+        path.addLine(to: CGPoint(x: 3.6, y: 11.2))
+        path.addCurve(to: CGPoint(x: 2.6, y: 10.4), control1: CGPoint(x: 3.1, y: 11.2), control2: CGPoint(x: 2.65, y: 10.9))
+        path.closeSubpath()
+        // Slots, cut out of the body by the even-odd rule.
+        path.addRect(CGRect(x: 4.4, y: 5.2, width: 0.9, height: 4.6))
+        path.addRect(CGRect(x: 6.7, y: 5.2, width: 0.9, height: 4.6))
+        
+        context.addPath(path)
+        context.setFillColor(UIColor.white.cgColor)
+        context.fillPath(using: .evenOdd)
+    })
+    if let image {
+        let _ = monogramDeletedIconCache.modify { current in
+            var current = current
+            current[size] = image
+            return current
+        }
+    }
+    return image
+}
+
+private final class MonogramIconRunDelegateData {
+    let ascent: CGFloat
+    let descent: CGFloat
+    let width: CGFloat
+    
+    init(ascent: CGFloat, descent: CGFloat, width: CGFloat) {
+        self.ascent = ascent
+        self.descent = descent
+        self.width = width
+    }
+}
+
+/// Replaces the deleted-message marker in the date text with a tinted trash icon.
+private func monogramDateAttributedString(_ text: String, font: UIFont, textColor: UIColor) -> NSAttributedString {
+    guard let markerRange = text.range(of: monogramDeletedDateMarker) else {
+        return NSAttributedString(string: text, font: font, textColor: textColor)
+    }
+    let iconSize = floor(font.pointSize)
+    guard let icon = monogramDeletedIcon(size: iconSize) else {
+        return NSAttributedString(string: text, font: font, textColor: textColor)
+    }
+    
+    var callbacks = CTRunDelegateCallbacks(
+        version: kCTRunDelegateCurrentVersion,
+        dealloc: { dataRef in
+            Unmanaged<MonogramIconRunDelegateData>.fromOpaque(dataRef).release()
+        },
+        getAscent: { dataRef in
+            return Unmanaged<MonogramIconRunDelegateData>.fromOpaque(dataRef).takeUnretainedValue().ascent
+        },
+        getDescent: { dataRef in
+            return Unmanaged<MonogramIconRunDelegateData>.fromOpaque(dataRef).takeUnretainedValue().descent
+        },
+        getWidth: { dataRef in
+            return Unmanaged<MonogramIconRunDelegateData>.fromOpaque(dataRef).takeUnretainedValue().width
+        }
+    )
+    let runDelegateData = MonogramIconRunDelegateData(ascent: font.ascender, descent: font.descender, width: icon.size.width)
+    guard let runDelegate = CTRunDelegateCreate(&callbacks, Unmanaged.passRetained(runDelegateData).toOpaque()) else {
+        return NSAttributedString(string: text, font: font, textColor: textColor)
+    }
+    
+    let result = NSMutableAttributedString()
+    result.append(NSAttributedString(string: String(text[text.startIndex ..< markerRange.lowerBound]), font: font, textColor: textColor))
+    result.append(NSAttributedString(string: ">", attributes: [
+        .attachment: icon,
+        .foregroundColor: textColor,
+        NSAttributedString.Key(rawValue: kCTRunDelegateAttributeName as String): runDelegate
+    ]))
+    result.append(NSAttributedString(string: " " + String(text[markerRange.upperBound...]), font: font, textColor: textColor))
+    return result
+}
+
 private func maybeAddRotationAnimation(_ layer: CALayer, duration: Double) {
     if let _ = layer.animation(forKey: "clockFrameAnimation") {
         return
@@ -549,7 +656,7 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             }
             
             let dateFont = Font.regular(floor(arguments.presentationData.fontSize.baseDisplaySize * 11.0 / 17.0))
-            let (date, dateApply) = dateLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: updatedDateText, font: dateFont, textColor: dateColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .middle, constrainedSize: arguments.constrainedSize, alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
+            let (date, dateApply) = dateLayout(TextNodeLayoutArguments(attributedString: monogramDateAttributedString(updatedDateText, font: dateFont, textColor: dateColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .middle, constrainedSize: arguments.constrainedSize, alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
             
             let checkOffset = floor(arguments.presentationData.fontSize.baseDisplaySize * 6.0 / 17.0)
             
