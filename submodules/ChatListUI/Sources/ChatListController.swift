@@ -2083,6 +2083,8 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
             
             self.ready.set(combineLatest(signals)
             |> map { values -> Bool in
+                // Monogram debug: [primaryInfo, stories].
+                Logger.shared.log("MonogramDebug", "chat list ready: \(values)")
                 return !values.contains(where: { !$0 })
             }
             |> filter { $0 })
