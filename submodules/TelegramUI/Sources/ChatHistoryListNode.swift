@@ -470,6 +470,23 @@ private struct ChatHistoryAnimatedEmojiConfiguration {
 
 private var nextClientId: Int32 = 1
 
+/// Monogram debug: logs when a signal delivers its first value, so a chat that never becomes ready
+/// shows in the app log which input of the history pipeline is still silent.
+private func monogramDebugLogFirstEvent<T, E>(label: String) -> (Signal<T, E>) -> Signal<T, E> {
+    return { signal in
+        return Signal { subscriber in
+            Logger.shared.log("MonogramDebug", "subscribed \(label)")
+            let isFirst = Atomic<Bool>(value: true)
+            return signal.start(next: { value in
+                if isFirst.swap(false) {
+                    Logger.shared.log("MonogramDebug", "first event \(label)")
+                }
+                subscriber.putNext(value)
+            }, error: subscriber.putError, completed: subscriber.putCompletion)
+        }
+    }
+}
+
 public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, ChatHistoryListNode {
     static let fixedAdMessageStableId: UInt32 = UInt32.max - 5000
 
@@ -1513,9 +1530,9 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
             }
         } else if case let .customView(historyView) = self.source {
             historyViewUpdate = combineLatest(queue: .mainQueue(),
-                self.chatHistoryLocationPromise.get(),
-                self.ignoreMessagesInTimestampRangePromise.get(),
-                self.ignoreMessageIdsPromise.get()
+                self.chatHistoryLocationPromise.get() |> monogramDebugLogFirstEvent(label: "chatHistoryNode_location"),
+                self.ignoreMessagesInTimestampRangePromise.get() |> monogramDebugLogFirstEvent(label: "chatHistoryNode_ignoreTimestampRange"),
+                self.ignoreMessageIdsPromise.get() |> monogramDebugLogFirstEvent(label: "chatHistoryNode_ignoreMessageIds")
             )
             |> distinctUntilChanged(isEqual: { lhs, rhs in
                 if lhs.0 != rhs.0 {
@@ -1580,9 +1597,9 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
             }
         } else {
             historyViewUpdate = combineLatest(queue: .mainQueue(),
-                self.chatHistoryLocationPromise.get(),
-                self.ignoreMessagesInTimestampRangePromise.get(),
-                self.ignoreMessageIdsPromise.get()
+                self.chatHistoryLocationPromise.get() |> monogramDebugLogFirstEvent(label: "chatHistoryNode_location"),
+                self.ignoreMessagesInTimestampRangePromise.get() |> monogramDebugLogFirstEvent(label: "chatHistoryNode_ignoreTimestampRange"),
+                self.ignoreMessageIdsPromise.get() |> monogramDebugLogFirstEvent(label: "chatHistoryNode_ignoreMessageIds")
             )
             |> distinctUntilChanged(isEqual: { lhs, rhs in
                 if lhs.0 != rhs.0 {
@@ -1598,6 +1615,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
             })
             |> mapToSignal { location, ignoreMessagesInTimestampRange, ignoreMessageIds in
                 return chatHistoryViewForLocation(location, ignoreMessagesInTimestampRange: ignoreMessagesInTimestampRange, ignoreMessageIds: ignoreMessageIds, context: context, chatLocation: chatLocation, chatLocationContextHolder: chatLocationContextHolder, scheduled: isScheduledMessages, fixedCombinedReadStates: fixedCombinedReadStates.with { $0 }, tag: tag, appendMessagesFromTheSameGroup: appendMessagesFromTheSameGroup, additionalData: additionalData, orderStatistics: [], useRootInterfaceStateForThread: useRootInterfaceStateForThread)
+                |> monogramDebugLogFirstEvent(label: "chatHistoryNode_viewForLocation")
                 |> beforeNext { viewUpdate in
                     switch viewUpdate {
                         case let .HistoryView(view, _, _, _, _, _, _):
@@ -1897,7 +1915,7 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
         }
         
         let historyViewUpdateValue = historyViewUpdate
-        historyViewUpdate = stopHistoryViewUpdates |> mapToSignal { value in
+        historyViewUpdate = (stopHistoryViewUpdates |> monogramDebugLogFirstEvent(label: "chatHistoryNode_stopHistoryViewUpdates")) |> mapToSignal { value in
             if value {
                 return .never()
             } else {
@@ -1909,33 +1927,33 @@ public final class ChatHistoryListNodeImpl: ASDisplayNode, ChatHistoryNode, Chat
         var measure_isFirstTime = true
         let messageViewQueue = Queue.mainQueue()
         let historyViewTransitionDisposable = (combineLatest(queue: messageViewQueue,
-            historyViewUpdate |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_historyViewUpdate"),
-            self.chatPresentationDataPromise.get() |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_chatPresentationData"),
-            selectedMessages |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_selectedMessages"),
-            updatingMedia |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_updatingMedia"),
-            automaticDownloadNetworkType |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_automaticDownloadNetworkType"),
-            preferredStoryHighQuality |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_preferredStoryHighQuality"),
-            animatedEmojiStickers |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_animatedEmojiStickers"),
-            additionalAnimatedEmojiStickers |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_additionalAnimatedEmojiStickers"),
-            customChannelDiscussionReadState |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_customChannelDiscussionReadState"),
-            customThreadOutgoingReadState |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_customThreadOutgoingReadState"),
-            availableReactions |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_availableReactions"),
-            availableMessageEffects |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_availableMessageEffects"),
-            savedMessageTags |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_savedMessageTags"),
-            defaultReaction |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_defaultReaction"),
-            accountPeer |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_accountPeer"),
-            accountCountry |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_accountCountry"),
-            audioTranscriptionSuggestion |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_audioTranscriptionSuggestion"),
-            promises |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_promises"),
-            topicAuthorId |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_topicAuthorId"),
-            translationState |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_translationState"),
-            maxReadStoryId |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_maxReadStoryId"),
-            recommendedChannels |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_recommendedChannels"),
-            audioTranscriptionTrial |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_audioTranscriptionTrial"),
-            chatThemes |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_chatThemes"),
-            deviceContactsNumbers |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_deviceContactsNumbers"),
-            contentSettings |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_contentSettings")
-        ) |> debug_measureTimeToFirstEvent(label: "chatHistoryNode_firstChatHistoryTransition")).startStrict(next: { [weak self] update, chatPresentationData, selectedMessages, updatingMedia, networkType, preferredStoryHighQuality, animatedEmojiStickers, additionalAnimatedEmojiStickers, customChannelDiscussionReadState, customThreadOutgoingReadState, availableReactions, availableMessageEffects, savedMessageTags, defaultReaction, accountPeer, accountCountry, suggestAudioTranscription, promises, topicAuthorId, translationState, maxReadStoryId, recommendedChannels, audioTranscriptionTrial, chatThemes, deviceContactsNumbers, contentSettings in
+            historyViewUpdate |> monogramDebugLogFirstEvent(label: "chatHistoryNode_historyViewUpdate"),
+            self.chatPresentationDataPromise.get() |> monogramDebugLogFirstEvent(label: "chatHistoryNode_chatPresentationData"),
+            selectedMessages |> monogramDebugLogFirstEvent(label: "chatHistoryNode_selectedMessages"),
+            updatingMedia |> monogramDebugLogFirstEvent(label: "chatHistoryNode_updatingMedia"),
+            automaticDownloadNetworkType |> monogramDebugLogFirstEvent(label: "chatHistoryNode_automaticDownloadNetworkType"),
+            preferredStoryHighQuality |> monogramDebugLogFirstEvent(label: "chatHistoryNode_preferredStoryHighQuality"),
+            animatedEmojiStickers |> monogramDebugLogFirstEvent(label: "chatHistoryNode_animatedEmojiStickers"),
+            additionalAnimatedEmojiStickers |> monogramDebugLogFirstEvent(label: "chatHistoryNode_additionalAnimatedEmojiStickers"),
+            customChannelDiscussionReadState |> monogramDebugLogFirstEvent(label: "chatHistoryNode_customChannelDiscussionReadState"),
+            customThreadOutgoingReadState |> monogramDebugLogFirstEvent(label: "chatHistoryNode_customThreadOutgoingReadState"),
+            availableReactions |> monogramDebugLogFirstEvent(label: "chatHistoryNode_availableReactions"),
+            availableMessageEffects |> monogramDebugLogFirstEvent(label: "chatHistoryNode_availableMessageEffects"),
+            savedMessageTags |> monogramDebugLogFirstEvent(label: "chatHistoryNode_savedMessageTags"),
+            defaultReaction |> monogramDebugLogFirstEvent(label: "chatHistoryNode_defaultReaction"),
+            accountPeer |> monogramDebugLogFirstEvent(label: "chatHistoryNode_accountPeer"),
+            accountCountry |> monogramDebugLogFirstEvent(label: "chatHistoryNode_accountCountry"),
+            audioTranscriptionSuggestion |> monogramDebugLogFirstEvent(label: "chatHistoryNode_audioTranscriptionSuggestion"),
+            promises |> monogramDebugLogFirstEvent(label: "chatHistoryNode_promises"),
+            topicAuthorId |> monogramDebugLogFirstEvent(label: "chatHistoryNode_topicAuthorId"),
+            translationState |> monogramDebugLogFirstEvent(label: "chatHistoryNode_translationState"),
+            maxReadStoryId |> monogramDebugLogFirstEvent(label: "chatHistoryNode_maxReadStoryId"),
+            recommendedChannels |> monogramDebugLogFirstEvent(label: "chatHistoryNode_recommendedChannels"),
+            audioTranscriptionTrial |> monogramDebugLogFirstEvent(label: "chatHistoryNode_audioTranscriptionTrial"),
+            chatThemes |> monogramDebugLogFirstEvent(label: "chatHistoryNode_chatThemes"),
+            deviceContactsNumbers |> monogramDebugLogFirstEvent(label: "chatHistoryNode_deviceContactsNumbers"),
+            contentSettings |> monogramDebugLogFirstEvent(label: "chatHistoryNode_contentSettings")
+        ) |> monogramDebugLogFirstEvent(label: "chatHistoryNode_firstChatHistoryTransition")).startStrict(next: { [weak self] update, chatPresentationData, selectedMessages, updatingMedia, networkType, preferredStoryHighQuality, animatedEmojiStickers, additionalAnimatedEmojiStickers, customChannelDiscussionReadState, customThreadOutgoingReadState, availableReactions, availableMessageEffects, savedMessageTags, defaultReaction, accountPeer, accountCountry, suggestAudioTranscription, promises, topicAuthorId, translationState, maxReadStoryId, recommendedChannels, audioTranscriptionTrial, chatThemes, deviceContactsNumbers, contentSettings in
             let (historyAppearsCleared, pendingUnpinnedAllMessages, pendingRemovedMessages, currentlyPlayingMessageIdAndType, scrollToMessageId, chatHasBots, allAdMessages) = promises
             
             if measure_isFirstTime {
