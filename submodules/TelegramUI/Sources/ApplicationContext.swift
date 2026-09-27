@@ -786,10 +786,13 @@ final class AuthorizedApplicationContext {
             }
         }
         self.context.account.importableContacts.set(optionalImportableContacts)
-        self.context.sharedContext.deviceContactPhoneNumbers.set(optionalImportableContacts
+        // Chat readiness must not wait for contact authorization or the first contact fetch.
+        self.context.sharedContext.deviceContactPhoneNumbers.set(Signal<Set<String>, NoError>.single(Set())
+        |> then(optionalImportableContacts
         |> map { contacts in
             return Set(contacts.keys.map { cleanPhoneNumber($0.rawValue) })
         })
+        |> distinctUntilChanged)
         
         let previousTheme = Atomic<PresentationTheme?>(value: nil)
         self.presentationDataDisposable = (context.sharedContext.presentationData
