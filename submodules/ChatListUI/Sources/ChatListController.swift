@@ -345,7 +345,7 @@ public class ChatListControllerImpl: TelegramBaseController, ChatListController 
                     }
                     
                     self.primaryContext?.leftButton = AnyComponentWithIdentity(id: "edit", component: AnyComponent(NavigationButtonComponent(
-                        content: .text(title: self.presentationData.strings.Common_Edit, isBold: false),
+                        content: chatListEditButtonContent(title: self.presentationData.strings.Common_Edit, ghostMode: MonogramGhost.isActive),
                         pressed: { [weak self] _ in
                             self?.editPressed()
                         }
@@ -6908,8 +6908,9 @@ private final class ChatListLocationContext {
                     isReorderingTabs,
                     peerStatus,
                     parentController.updatedPresentationData.1,
-                    storyPostingAvailable
-                ).startStrict(next: { [weak self] networkState, proxy, passcode, stateAndFilterId, isReorderingTabs, peerStatus, presentationData, storyPostingAvailable in
+                    combineLatest(storyPostingAvailable, MonogramSettings.value(.ghostMode))
+                ).startStrict(next: { [weak self] networkState, proxy, passcode, stateAndFilterId, isReorderingTabs, peerStatus, presentationData, storyPostingAvailableAndGhostMode in
+                    let (storyPostingAvailable, ghostMode) = storyPostingAvailableAndGhostMode
                     guard let self else {
                         return
                     }
@@ -6922,7 +6923,8 @@ private final class ChatListLocationContext {
                         isReorderingTabs: isReorderingTabs,
                         peerStatus: peerStatus,
                         presentationData: presentationData,
-                        storyPostingAvailable: storyPostingAvailable
+                        storyPostingAvailable: storyPostingAvailable,
+                        ghostMode: ghostMode
                     )
                 })
             } else {
@@ -7149,7 +7151,8 @@ private final class ChatListLocationContext {
         isReorderingTabs: Bool,
         peerStatus: NetworkStatusTitle.Status?,
         presentationData: PresentationData,
-        storyPostingAvailable: Bool
+        storyPostingAvailable: Bool,
+        ghostMode: Bool
     ) {
         let defaultTitle: String
         switch location {
@@ -7252,7 +7255,7 @@ private final class ChatListLocationContext {
                         )))
                     } else {
                         self.leftButton = AnyComponentWithIdentity(id: "edit", component: AnyComponent(NavigationButtonComponent(
-                            content: .text(title: presentationData.strings.Common_Edit, isBold: false),
+                            content: chatListEditButtonContent(title: presentationData.strings.Common_Edit, ghostMode: ghostMode),
                             pressed: { [weak self] _ in
                                 self?.parentController?.editPressed()
                             }
@@ -7547,5 +7550,14 @@ private func monogramFilteredStorySubscriptions(_ signal: Signal<EngineStorySubs
             return EngineStorySubscriptions(accountItem: nil, items: [], hasMoreToken: nil)
         }
         return subscriptions
+    }
+}
+
+/// Monogram: like the desktop client, the "Edit" button carries a ghost mark while ghost mode is on.
+private func chatListEditButtonContent(title: String, ghostMode: Bool) -> NavigationButtonComponent.Content {
+    if ghostMode {
+        return .textWithTrailingIcon(title: title, isBold: false, imageName: "Chat List/GhostModeIcon")
+    } else {
+        return .text(title: title, isBold: false)
     }
 }

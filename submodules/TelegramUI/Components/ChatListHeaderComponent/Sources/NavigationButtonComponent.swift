@@ -26,6 +26,8 @@ public final class NavigationButtonComponent: Component {
     
     public enum Content: Equatable {
         case text(title: String, isBold: Bool)
+        /// Monogram: text followed by a small status icon (e.g. the ghost-mode mark next to "Edit").
+        case textWithTrailingIcon(title: String, isBold: Bool, imageName: String)
         case more
         case icon(imageName: String)
         case proxy(status: ChatTitleProxyStatus)
@@ -58,6 +60,9 @@ public final class NavigationButtonComponent: Component {
         private var iconView: UIImageView?
         private var iconImageName: String?
         
+        private var trailingIconView: UIImageView?
+        private var trailingIconImageName: String?
+        
         private var proxyNode: ChatTitleProxyNode?
         
         private var moreButton: MoreHeaderButton?
@@ -78,6 +83,7 @@ public final class NavigationButtonComponent: Component {
                     self.textView?.alpha = 0.6
                     self.proxyNode?.alpha = 0.6
                     self.iconView?.alpha = 0.6
+                    self.trailingIconView?.alpha = 0.6
                 } else {
                     self.textView?.alpha = 1.0
                     self.textView?.layer.animateAlpha(from: 0.6, to: 1.0, duration: 0.2)
@@ -87,6 +93,9 @@ public final class NavigationButtonComponent: Component {
                     
                     self.iconView?.alpha = 1.0
                     self.iconView?.layer.animateAlpha(from: 0.6, to: 1.0, duration: 0.2)
+                    
+                    self.trailingIconView?.alpha = 1.0
+                    self.trailingIconView?.layer.animateAlpha(from: 0.6, to: 1.0, duration: 0.2)
                 }
             }
         }
@@ -111,6 +120,7 @@ public final class NavigationButtonComponent: Component {
             
             var textString: NSAttributedString?
             var imageName: String?
+            var trailingImageName: String?
             var proxyStatus: ChatTitleProxyStatus?
             var isMore: Bool = false
             
@@ -121,6 +131,9 @@ public final class NavigationButtonComponent: Component {
                 } else {
                     textString = NSAttributedString(string: title, font: isBold ? Font.bold(17.0) : Font.medium(17.0), textColor: theme.chat.inputPanel.panelControlColor)
                 }
+            case let .textWithTrailingIcon(title, isBold, imageNameValue):
+                textString = NSAttributedString(string: title, font: isBold ? Font.bold(17.0) : Font.medium(17.0), textColor: theme.chat.inputPanel.panelControlColor)
+                trailingImageName = imageNameValue
             case .more:
                 isMore = true
             case let .icon(imageNameValue):
@@ -145,12 +158,48 @@ public final class NavigationButtonComponent: Component {
                 textView.attributedText = textString
                 let textSize = textView.updateLayout(availableSize)
                 let textInset: CGFloat = 12.0
-                size.width = max(44.0, textSize.width + textInset * 2.0)
                 
-                textView.frame = CGRect(origin: CGPoint(x: floor((size.width - textSize.width) / 2.0), y: floor((availableSize.height - textSize.height) / 2.0)), size: textSize)
-            } else if let textView = self.textView {
-                self.textView = nil
-                textView.removeFromSuperview()
+                var trailingIconSize: CGSize?
+                if let trailingImageName {
+                    let trailingIconView: UIImageView
+                    if let current = self.trailingIconView {
+                        trailingIconView = current
+                    } else {
+                        trailingIconView = UIImageView()
+                        trailingIconView.isUserInteractionEnabled = false
+                        self.trailingIconView = trailingIconView
+                        self.addSubview(trailingIconView)
+                    }
+                    if self.trailingIconImageName != trailingImageName || themeUpdated {
+                        self.trailingIconImageName = trailingImageName
+                        trailingIconView.image = generateTintedImage(image: UIImage(bundleImageName: trailingImageName), color: theme.chat.inputPanel.panelControlColor)
+                    }
+                    trailingIconSize = trailingIconView.image?.size
+                } else if let trailingIconView = self.trailingIconView {
+                    self.trailingIconView = nil
+                    self.trailingIconImageName = nil
+                    trailingIconView.removeFromSuperview()
+                }
+                
+                if let trailingIconSize, let trailingIconView = self.trailingIconView {
+                    let iconSpacing: CGFloat = 4.0
+                    size.width = textInset + textSize.width + iconSpacing + trailingIconSize.width + textInset - 2.0
+                    textView.frame = CGRect(origin: CGPoint(x: textInset, y: floor((availableSize.height - textSize.height) / 2.0)), size: textSize)
+                    trailingIconView.frame = CGRect(origin: CGPoint(x: textInset + textSize.width + iconSpacing, y: floor((availableSize.height - trailingIconSize.height) / 2.0)), size: trailingIconSize)
+                } else {
+                    size.width = max(44.0, textSize.width + textInset * 2.0)
+                    textView.frame = CGRect(origin: CGPoint(x: floor((size.width - textSize.width) / 2.0), y: floor((availableSize.height - textSize.height) / 2.0)), size: textSize)
+                }
+            } else {
+                if let textView = self.textView {
+                    self.textView = nil
+                    textView.removeFromSuperview()
+                }
+                if let trailingIconView = self.trailingIconView {
+                    self.trailingIconView = nil
+                    self.trailingIconImageName = nil
+                    trailingIconView.removeFromSuperview()
+                }
             }
             
             if let imageName = imageName {
