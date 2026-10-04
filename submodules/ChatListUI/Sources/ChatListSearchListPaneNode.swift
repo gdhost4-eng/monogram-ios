@@ -2387,7 +2387,8 @@ final class ChatListSearchListPaneNode: ASDisplayNode, ChatListSearchPaneNode {
                     }
 
                     let updatedLocalPeers = predicate |> mapToSignal { predicate in
-                        return context.engine.contacts.searchLocalPeers(query: query.lowercased(), predicate: predicate)
+                        // Monogram: chats are also found by the text of their local note.
+                        return context.engine.contacts.searchLocalPeers(query: query.lowercased(), predicate: predicate, includeMonogramNotes: true)
                     }
                     |> mapToSignal { peers -> Signal<[EngineRenderedPeer], NoError> in
                         return context.engine.data.subscribe(

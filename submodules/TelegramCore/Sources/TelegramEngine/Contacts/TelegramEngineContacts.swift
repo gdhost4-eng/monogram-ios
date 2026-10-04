@@ -60,8 +60,15 @@ public extension TelegramEngine {
             return _internal_searchPeers(accountPeerId: self.account.peerId, postbox: self.account.postbox, network: self.account.network, query: query, scope: scope)
         }
 
-        public func searchLocalPeers(query: String, scope: TelegramSearchPeersScope = .everywhere, predicate: ChatListFilterPredicate? = nil) -> Signal<[EngineRenderedPeer], NoError> {
-            return self.account.postbox.searchPeers(query: query, predicate: predicate)
+        public func searchLocalPeers(query: String, scope: TelegramSearchPeersScope = .everywhere, predicate: ChatListFilterPredicate? = nil, includeMonogramNotes: Bool = false) -> Signal<[EngineRenderedPeer], NoError> {
+            let foundPeers: Signal<[RenderedPeer], NoError>
+            if includeMonogramNotes {
+                // Monogram: the chat list search also finds chats by the text of their local note.
+                foundPeers = monogramSearchPeersIncludingNotes(postbox: self.account.postbox, accountPeerId: self.account.peerId, query: query, predicate: predicate)
+            } else {
+                foundPeers = self.account.postbox.searchPeers(query: query, predicate: predicate)
+            }
+            return foundPeers
             |> map { peers in
                 switch scope {
                 case .everywhere:
