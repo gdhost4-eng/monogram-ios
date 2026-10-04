@@ -33,6 +33,22 @@ Telegram-iOS остаётся фундаментом. Monogram добавляе�
 
 ## Слой Monogram
 
+### Чистая логика: `submodules/MonogramKit/`
+
+Модуль без зависимостей, кроме Foundation. В него вынесено всё, что можно проверить без приложения; от него зависят `TelegramCore` и `MonogramUI`.
+
+| Файл | Что делает |
+| --- | --- |
+| `MonogramSearch.swift` | Сопоставление слов для локального поиска, те же правила, что в `monogram_search` на ПК |
+| `MonogramNotesIndex.swift` | Заметки одного аккаунта в памяти, поиск по ним, ключи `UserDefaults` |
+| `MonogramPeerIdentity.swift` | ID в формате ботов, оценка даты регистрации по ID |
+| `MonogramAppGroup.swift` | Имя App Group по bundle id приложения или расширения |
+| `MonogramGhostRequests.swift` | Какие запросы режим призрака гасит по имени функции |
+
+Тесты лежат рядом (`Tests/MonogramKitTests`) и запускаются без симулятора: `swift test --package-path submodules/MonogramKit`. Workflow сборки выполняет их перед IPA; упавший тест помечает запуск, но сборку не останавливает. Для Bazel есть цель `//submodules/MonogramKit:MonogramKitTests`.
+
+Новую логику, которой не нужны Postbox, сеть и UIKit, стоит писать здесь, а в `TelegramCore` и `MonogramUI` оставлять обёртку.
+
 ### Ядро: `submodules/TelegramCore/Sources/Monogram/`
 
 Часть модуля `TelegramCore`, поэтому без UIKit и Display (TelegramCore общий с macOS-клиентом).
@@ -40,10 +56,11 @@ Telegram-iOS остаётся фундаментом. Monogram добавляе�
 | Файл | Что делает |
 | --- | --- |
 | `MonogramSettings.swift` | Все переключатели (`MonogramSettings.Key`), проверки режима призрака (`MonogramGhost`), фильтр исходящих запросов |
+| `MonogramPeerNotes.swift` | Локальные заметки: хранение, индекс в памяти, поиск чатов по тексту заметки |
 | `MonogramGhostActions.swift` | «Прочитать (видно собеседнику)», действия после отправки сообщения в режиме призрака |
-| `MonogramMessageAttributes.swift` | Атрибуты «удалено» и «история изменений», их сохранение при удалении, правке и перезаписи сообщения |
+| `MonogramMessageAttributes.swift` | Атрибуты «удалено» и «история изменений», их сохранение при удалении, автоудалении, правке и перезаписи сообщения; выборка удалённых сообщений чата |
 | `MonogramSelfDestructingMedia.swift` | Одноразовые медиа и медиа с таймером остаются в чате, предзагрузка при получении |
-| `MonogramCopyProtection.swift` | Снятие запрета на копирование, пересылка защищённого сообщения копией |
+| `MonogramCopyProtection.swift` | Снятие запрета на копирование; пересылка копией защищённого или уже удалённого на сервере сообщения |
 
 ### Интерфейс: `submodules/MonogramUI/`
 
@@ -53,7 +70,8 @@ Telegram-iOS остаётся фундаментом. Monogram добавляе�
 | --- | --- |
 | `MonogramSettingsController.swift` | Экран «Настройки → Monogram» |
 | `MonogramEditHistoryController.swift` | Экран истории изменений сообщения |
-| `MonogramPeerInfo.swift` | ID в формате ботов, примерная дата регистрации, локальные заметки и их редактор |
+| `MonogramDeletedMessagesController.swift` | Список удалённых сообщений чата, открывается из профиля |
+| `MonogramPeerInfo.swift` | Текст ID и примерной даты регистрации для профиля, редактор локальной заметки |
 
 `submodules/TelegramUI/Sources/Chat/ChatControllerMonogram.swift` — подтверждение отправки стикеров и GIF.
 
@@ -84,16 +102,23 @@ Telegram-iOS остаётся фундаментом. Monogram добавляе�
 | Удаление, найденное при перепроверке истории канала | `HistoryViewStateValidation` | `monogramKeepMessageRemovedByValidation` помечает и обновляет версию состояния канала |
 | Правка, пришедшая обновлением или найденная при перепроверке | `AccountStateManagementUtils` (`EditMessage`), `HistoryViewStateValidation` | `monogramAttributesForEdit` дописывает прежний текст в историю |
 | Истечение таймера в секретном чате | `ManagedAutoremoveMessageOperations` | `monogramKeepExpiredSecretMessage` снимает таймер, медиа остаётся |
+| Истечение таймера автоудаления в обычном чате | `ManagedAutoremoveMessageOperations` | `monogramKeepAutoremovedMessage` помечает удалённым и снимает таймер. Таймер снимать обязательно: иначе запись о нём остаётся первой в очереди и удаление планируется снова |
 
 То, что пользователь удаляет на этом устройстве, идёт мимо этих точек (`DeleteMessagesInteractively`) и удаляется по-настоящему. Удаление своего сообщения с другого устройства приходит обычным обновлением и сохраняется с пометкой, как и чужое.
 
-Остальные точки входа: меню чата в списке (`ChatListUI/ChatContextMenus`), меню сообщения (`ChatInterfaceStateContextMenus`), профиль (`PeerInfoProfileItems`), раздел настроек (`PeerInfoSettingsItems`, `PeerInfoScreenSettingsActions`), значок режима рядом с «Изм.» (`ChatListController`, `NavigationButtonComponent`), быстрые действия иконки (`ApplicationShortcutItem`, `AppDelegate`), пометка удалённого сообщения (`StringForMessageTimestampStatus`, `ChatMessageDateAndStatusNode`), реклама (`AdMessages`, `AdPeers`), защита от копирования (`MessageUtils`, `PeerUtils`, `EnqueueMessage`).
+Сообщение с пометкой «удалено» существует только на устройстве, поэтому всё, что требует его на сервере, для него отключено: «Ответить», «Закрепить», «Изменить» (`ChatInterfaceStateContextMenus`) и реакции (`canAddMessageReactions`). Пересылка превращается в отправку копии (`monogramConvertProtectedForwards`); медиа при этом уйдёт, только пока действительна ссылка на файл.
+
+Список удалённых сообщений чата строится без отдельного индекса: `engine.messages.monogramDeletedMessages` просматривает атрибуты последних 50 000 сообщений чата (`scanMessageAttributes`). Так в список попадают и сообщения, сохранённые до появления этого экрана.
+
+Поиск по заметкам подключён в одном месте — `TelegramEngine.Contacts.searchLocalPeers(includeMonogramNotes: true)`, который вызывает только поиск списка чатов. Остальные вызовы (подсказки упоминаний, выбор получателя) заметки не видят.
+
+Остальные точки входа: меню чата в списке (`ChatListUI/ChatContextMenus`), меню сообщения (`ChatInterfaceStateContextMenus`), профиль (`PeerInfoProfileItems`), раздел настроек (`PeerInfoSettingsItems`, `PeerInfoScreenSettingsActions`), значок режима рядом с «Изм.» (`ChatListController`, `NavigationButtonComponent`), быстрые действия иконки (`ApplicationShortcutItem`, `AppDelegate`), значки «изменено» и «удалено» у времени сообщения (`StringForMessageTimestampStatus`, `ChatMessageDateAndStatusNode`), реклама (`AdMessages`, `AdPeers`), защита от копирования (`MessageUtils`, `PeerUtils`, `EnqueueMessage`).
 
 ## Хранение
 
-- **Настройки** — `UserDefaults.standard`, ключи `monogram.<имя>`, общие для всех аккаунтов. Значения кэшируются в памяти, чтение дешёвое и безопасно в горячих путях. Расширения приложения читают собственный `UserDefaults` и видят значения по умолчанию.
-- **Заметки** — `UserDefaults.standard`, ключ `monogram.note.<аккаунт>.<собеседник>`.
-- **Удалённые сообщения и история изменений** — атрибуты `MonogramDeletedMessageAttribute` и `MonogramEditHistoryMessageAttribute` на самом сообщении в Postbox, зарегистрированы в `AccountManager.swift`. Отдельной базы, как в ПК-версии, нет. История ограничена 100 версиями и хранит только текст.
+- **Настройки** — ключи `monogram.<имя>`, общие для всех аккаунтов. Если у приложения есть App Group (`group.<bundle id>`), они лежат в его `UserDefaults` и видны расширениям; при первом запуске основное приложение переносит туда сохранённые ранее значения. Если App Group нет (так бывает после переподписи), каждый процесс пользуется своим `UserDefaults.standard`, и расширения видят значения по умолчанию. Значения кэшируются в памяти, чтение дешёвое и безопасно в горячих путях.
+- **Заметки** — `UserDefaults.standard` основного приложения, ключ `monogram.note.<аккаунт>.<собеседник>`; при первом обращении читаются в память целиком.
+- **Удалённые сообщения и история изменений** — атрибуты `MonogramDeletedMessageAttribute` и `MonogramEditHistoryMessageAttribute` на самом сообщении в Postbox, зарегистрированы в `AccountManager.swift`. Отдельной базы, как в ПК-версии, нет, поэтому очистка истории чата на устройстве удаляет и их. История ограничена 100 версиями и хранит только текст.
 - Новый ключ настроек обязан иметь значение по умолчанию в `MonogramSettings.Key.defaultValue`.
 
 ## Правила для правок

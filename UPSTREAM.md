@@ -22,7 +22,7 @@
 
 ## Политика правок
 
-1. Новая логика размещается в `submodules/TelegramCore/Sources/Monogram/` и `submodules/MonogramUI/`.
+1. Новая логика размещается в `submodules/MonogramKit/` (то, чему хватает Foundation), `submodules/TelegramCore/Sources/Monogram/` и `submodules/MonogramUI/`.
 2. В файлах upstream остаётся минимальная точка встраивания — обычно один вызов и комментарий `// Monogram:` с причиной.
 3. Исходники хранятся с LF (`.gitattributes`). Файл, сохранённый с CRLF, даёт дифф на все строки и гарантированный конфликт при слиянии.
 4. Серверные права, Premium и семантика Telegram API не подменяются.
@@ -33,7 +33,8 @@
 
 **Сборка и конфигурация**
 
-- `.github/workflows/build.yml` — сборка IPA на macOS-исполнителе с самоподписанными профилями и кэшем Bazel.
+- `.github/workflows/build.yml` — сборка IPA на macOS-исполнителе с самоподписанными профилями и кэшем Bazel; перед ней тесты `MonogramKit`.
+- `submodules/TelegramCore/BUILD` — зависимость от `//submodules/MonogramKit`.
 - `.gitmodules` — абсолютные URL для `rlottie` и `tgcalls` вместо относительных.
 - `build-system/Make/BuildConfiguration.py`, `build-system/example-configuration/variables.bzl`, `submodules/BuildConfig/BUILD` — `api_hash` передаётся в `BuildConfig` из конфигурации.
 - `.gitignore`, `.gitattributes` — локальная конфигурация и подпись вне Git; LF для исходников.
@@ -58,9 +59,9 @@
 **Функции Monogram** — точки встраивания, описанные в `ARCHITECTURE.md`:
 
 - Postbox: `SeedConfiguration.swift`, `MessageHistoryTable.swift` (хук `preserveExistingMessageMedia`).
-- TelegramCore: `Account/AccountManager.swift`, `Network/Network.swift`, `PendingMessages/EnqueueMessage.swift`, `State/AccountStateManagementUtils.swift`, `State/HistoryViewStateValidation.swift`, `State/ManagedAccountPresence.swift`, `State/ManagedAutoremoveMessageOperations.swift`, `State/ManagedLocalInputActivities.swift`, `State/ManagedSynchronizeConsumeMessageContentsOperations.swift`, `State/PendingMessageManager.swift`, `State/SynchronizePeerReadState.swift`, `SyncCore/SyncCore_StandaloneAccountTransaction.swift`, `TelegramEngine/Messages/AdMessages.swift`, `TelegramEngine/Messages/TelegramEngineMessages.swift`, `TelegramEngine/Peers/AdPeers.swift`, `Utils/MessageUtils.swift`, `Utils/PeerUtils.swift`.
-- ChatListUI: `ChatContextMenus.swift`, `ChatListController.swift`.
-- TelegramUI: `BUILD`, `ChatController.swift`, `ChatControllerContentData.swift`, `ChatHistoryListNode.swift`, `ChatInterfaceStateContextMenus.swift`, `Chat/ChatControllerMediaRecording.swift`, `ApplicationShortcutItem.swift`, `Components/Chat/ChatMessageDateAndStatusNode` (два файла), `Components/ChatListHeaderComponent/Sources/NavigationButtonComponent.swift`, `Components/PeerInfo/PeerInfoScreen` (`BUILD`, `PeerInfoProfileItems.swift`, `PeerInfoScreen.swift`, `PeerInfoSettingsItems.swift`).
+- TelegramCore: `Account/AccountManager.swift`, `Network/Network.swift`, `PendingMessages/EnqueueMessage.swift`, `State/AccountStateManagementUtils.swift`, `State/HistoryViewStateValidation.swift`, `State/ManagedAccountPresence.swift`, `State/ManagedAutoremoveMessageOperations.swift`, `State/ManagedLocalInputActivities.swift`, `State/ManagedSynchronizeConsumeMessageContentsOperations.swift`, `State/PendingMessageManager.swift`, `State/SynchronizePeerReadState.swift`, `SyncCore/SyncCore_StandaloneAccountTransaction.swift`, `TelegramEngine/Contacts/TelegramEngineContacts.swift`, `TelegramEngine/Messages/AdMessages.swift`, `TelegramEngine/Messages/TelegramEngineMessages.swift`, `TelegramEngine/Peers/AdPeers.swift`, `Utils/MessageUtils.swift`, `Utils/PeerUtils.swift`.
+- ChatListUI: `ChatContextMenus.swift`, `ChatListController.swift`, `ChatListSearchListPaneNode.swift`.
+- TelegramUI: `BUILD`, `ChatController.swift`, `ChatControllerContentData.swift`, `ChatHistoryListNode.swift`, `ChatInterfaceStateContextMenus.swift`, `Chat/ChatControllerMediaRecording.swift`, `ApplicationShortcutItem.swift`, `Components/Chat/ChatMessageDateAndStatusNode` (два файла), `Components/Chat/ChatMessageItemCommon/Sources/ChatMessageItemCommon.swift`, `Components/ChatListHeaderComponent/Sources/NavigationButtonComponent.swift`, `Components/PeerInfo/PeerInfoScreen` (`BUILD`, `PeerInfoProfileItems.swift`, `PeerInfoScreen.swift`, `PeerInfoSettingsItems.swift`).
 
 ## Ожидаемые конфликтные зоны
 
