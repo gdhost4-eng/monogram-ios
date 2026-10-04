@@ -13,3 +13,12 @@ submodules/Stripe/* linguist-vendored
 submodules/ton/tonlib-src/* linguist-vendored
 submodules/webp/include/* linguist-vendored
 third-party/* linguist-vendored
+
+# Monogram: the sources are edited on Windows too. Keep them LF in the repository whatever
+# git client or core.autocrlf setting made the commit, so that one edit does not rewrite
+# every line of a file and conflict with the next upstream merge.
+*.swift text eol=lf
+*.bzl text eol=lf
+*.yml text eol=lf
+BUILD text eol=lf
+BUILD.bazel text eol=lf
