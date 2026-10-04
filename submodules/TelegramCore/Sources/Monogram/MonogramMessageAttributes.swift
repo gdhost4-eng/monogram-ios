@@ -121,6 +121,46 @@ func monogramKeepDeletedMessages(transaction: Transaction, ids: [MessageId]) -> 
     return remaining
 }
 
+/// History validation found that `id` is gone from the server: it was deleted while this device was not
+/// receiving the updates of the chat. If Monogram keeps deleted messages, marks it as deleted and stamps it
+/// with the validated channel state, so that it is not validated again; returns false when the message has
+/// to be removed as usual.
+func monogramKeepMessageRemovedByValidation(transaction: Transaction, id: MessageId, channelPts: Int32?) -> Bool {
+    guard MonogramSettings.get(.saveDeletedMessages), id.namespace == Namespaces.Message.Cloud, id.peerId.namespace != Namespaces.Peer.SecretChat, transaction.getMessage(id) != nil else {
+        return false
+    }
+    let timestamp = Int32(Date().timeIntervalSince1970)
+    transaction.updateMessage(id, update: { currentMessage in
+        var attributes = currentMessage.attributes
+        if let channelPts = channelPts {
+            attributes.removeAll(where: { $0 is ChannelMessageStateVersionAttribute })
+            attributes.append(ChannelMessageStateVersionAttribute(pts: channelPts))
+        }
+        if !attributes.contains(where: { $0 is MonogramDeletedMessageAttribute }) {
+            attributes.append(MonogramDeletedMessageAttribute(date: timestamp))
+        }
+        return .update(monogramStoreMessage(currentMessage, attributes: attributes))
+    })
+    return true
+}
+
+/// The Postbox seed hook `mergeMessageAttributes`: whenever a stored message is overwritten with another
+/// copy of it (a history refetch, a validation pass, an update that rebuilds the message from the server
+/// response), the markers Monogram keeps only locally are carried over from the previous version.
+func monogramMergeLocalMessageAttributes(previous: [MessageAttribute], updated: inout [MessageAttribute]) {
+    for attribute in previous {
+        if attribute is MonogramDeletedMessageAttribute {
+            if !updated.contains(where: { $0 is MonogramDeletedMessageAttribute }) {
+                updated.append(attribute)
+            }
+        } else if attribute is MonogramEditHistoryMessageAttribute {
+            if !updated.contains(where: { $0 is MonogramEditHistoryMessageAttribute }) {
+                updated.append(attribute)
+            }
+        }
+    }
+}
+
 /// Applied to the attributes of an incoming edit of `previousMessage`: carries over what Monogram
 /// stores locally and, if the text changed, remembers the previous version.
 func monogramAttributesForEdit(previousMessage: Message, updatedText: String, updatedAttributes: [MessageAttribute]) -> [MessageAttribute] {

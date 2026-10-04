@@ -117,6 +117,9 @@ public let telegramPostboxSeedConfiguration: SeedConfiguration = {
             if previous.isEmpty {
                 return
             }
+            // Monogram: the deleted mark and the edit history live only on this device.
+            monogramMergeLocalMessageAttributes(previous: previous, updated: &updated)
+
             var audioTranscription: AudioTranscriptionMessageAttribute?
             for attribute in previous {
                 if let attribute = attribute as? AudioTranscriptionMessageAttribute {
