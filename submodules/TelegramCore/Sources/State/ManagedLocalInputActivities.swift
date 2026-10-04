@@ -151,6 +151,9 @@ private func monogramGhostBlocksActivity(_ activity: PeerInputActivity?) -> Bool
         return MonogramGhost.blocksTyping
     case .speakingInGroupCall:
         return false
+    case .seeingEmojiInteraction:
+        // Tells the sender that the animation was watched, so it is a read receipt as well.
+        return MonogramGhost.blocksReadReceipts || MonogramGhost.blocksOtherActions
     default:
         return MonogramGhost.blocksOtherActions
     }
