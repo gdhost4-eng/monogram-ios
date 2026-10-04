@@ -68,6 +68,52 @@ private func monogramDeletedIcon(size: CGFloat, color: UIColor) -> UIImage? {
     return image
 }
 
+// Monogram: placeholder of the "edited" mark in the date text; it never leaves this file,
+// the layout replaces it with a gap and draws a pencil over the gap.
+private let monogramEditedDateMarker = "\u{270F} "
+
+// Monogram: pencil icon for edited messages, same glyph as in Monogram for desktop (12x12 viewBox).
+private func monogramEditedIcon(size: CGFloat, color: UIColor) -> UIImage? {
+    let cacheKey = "edited-\(size)-\(color.argb)"
+    if let image = monogramDeletedIconCache.with({ $0[cacheKey] }) {
+        return image
+    }
+    let image = generateImage(CGSize(width: size, height: size), rotatedContext: { contextSize, context in
+        context.clear(CGRect(origin: CGPoint(), size: contextSize))
+        let scale = contextSize.width / 12.0
+        context.scaleBy(x: scale, y: scale)
+
+        let path = CGMutablePath()
+        // Eraser end.
+        path.move(to: CGPoint(x: 8.6, y: 1.1))
+        path.addCurve(to: CGPoint(x: 10.0, y: 1.1), control1: CGPoint(x: 9.0, y: 0.7), control2: CGPoint(x: 9.6, y: 0.7))
+        path.addLine(to: CGPoint(x: 10.9, y: 2.0))
+        path.addCurve(to: CGPoint(x: 10.9, y: 3.4), control1: CGPoint(x: 11.3, y: 2.4), control2: CGPoint(x: 11.3, y: 3.0))
+        path.addLine(to: CGPoint(x: 10.1, y: 4.2))
+        path.addLine(to: CGPoint(x: 7.8, y: 1.9))
+        path.closeSubpath()
+        // Body with the tip.
+        path.move(to: CGPoint(x: 7.1, y: 2.6))
+        path.addLine(to: CGPoint(x: 9.4, y: 4.9))
+        path.addLine(to: CGPoint(x: 3.9, y: 10.4))
+        path.addLine(to: CGPoint(x: 1.0, y: 11.0))
+        path.addLine(to: CGPoint(x: 1.6, y: 8.1))
+        path.closeSubpath()
+
+        context.addPath(path)
+        context.setFillColor(color.cgColor)
+        context.fillPath(using: .evenOdd)
+    })
+    if let image {
+        let _ = monogramDeletedIconCache.modify { current in
+            var current = current
+            current[cacheKey] = image
+            return current
+        }
+    }
+    return image
+}
+
 private func maybeAddRotationAnimation(_ layer: CALayer, duration: Double) {
     if let _ = layer.animation(forKey: "clockFrameAnimation") {
         return
@@ -320,6 +366,7 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
     private var clockMinNode: ASImageNode?
     private let dateNode: TextNode
     private var monogramDeletedIconNode: ASImageNode?
+    private var monogramEditedIconNode: ASImageNode?
     private var impressionIcon: ASImageNode?
     private var reactionNodes: [MessageReaction.Reaction: StatusReactionNode] = [:]
     private let reactionButtonsContainer = ReactionButtonsAsyncLayoutContainer()
@@ -597,7 +644,8 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             if arguments.edited {
                 if let useEditedTimestamp = arguments.context.getAppConfigValue("message_primary_edited_date") as? Bool, useEditedTimestamp {
                 } else {
-                    updatedDateText = "\(arguments.presentationData.strings.Conversation_MessageEditedLabel) \(updatedDateText)"
+                    // Monogram: a pencil instead of the word "edited", as in Monogram for desktop.
+                    updatedDateText = monogramEditedDateMarker + updatedDateText
                 }
             }
             if let impressionCount = arguments.impressionCount {
@@ -606,6 +654,19 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
             
             let dateFont = Font.regular(floor(arguments.presentationData.fontSize.baseDisplaySize * 11.0 / 17.0))
             
+            // Monogram: the edited marker becomes a gap in the text, and a pencil is drawn over it. It stands
+            // before the deleted marker, so it is replaced first and the trash icon is measured after the gap.
+            var monogramEditedIconImage: UIImage?
+            var monogramEditedIconOffset: CGFloat = 0.0
+            if let markerRange = updatedDateText.range(of: monogramEditedDateMarker) {
+                let prefix = String(updatedDateText[updatedDateText.startIndex ..< markerRange.lowerBound])
+                if !prefix.isEmpty {
+                    monogramEditedIconOffset = ceil((prefix as NSString).size(withAttributes: [.font: dateFont]).width)
+                }
+                updatedDateText.replaceSubrange(markerRange, with: "\u{2003} ")
+                monogramEditedIconImage = monogramEditedIcon(size: floor(dateFont.pointSize), color: dateColor)
+            }
+
             // Monogram: the deleted marker becomes a gap in the text, and a trash icon is drawn over it.
             var monogramDeletedIconImage: UIImage?
             var monogramDeletedIconOffset: CGFloat = 0.0
@@ -1199,6 +1260,25 @@ public class ChatMessageDateAndStatusNode: ASDisplayNode {
                             iconNode.frame = CGRect(origin: CGPoint(x: monogramDeletedIconOffset, y: floor((date.size.height - monogramDeletedIconImage.size.height) / 2.0)), size: monogramDeletedIconImage.size)
                         } else if let iconNode = strongSelf.monogramDeletedIconNode {
                             strongSelf.monogramDeletedIconNode = nil
+                            iconNode.removeFromSupernode()
+                        }
+
+                        if let monogramEditedIconImage {
+                            let iconNode: ASImageNode
+                            if let current = strongSelf.monogramEditedIconNode {
+                                iconNode = current
+                            } else {
+                                iconNode = ASImageNode()
+                                iconNode.isLayerBacked = true
+                                iconNode.displaysAsynchronously = false
+                                iconNode.displayWithoutProcessing = true
+                                strongSelf.monogramEditedIconNode = iconNode
+                                strongSelf.dateNode.addSubnode(iconNode)
+                            }
+                            iconNode.image = monogramEditedIconImage
+                            iconNode.frame = CGRect(origin: CGPoint(x: monogramEditedIconOffset, y: floor((date.size.height - monogramEditedIconImage.size.height) / 2.0)), size: monogramEditedIconImage.size)
+                        } else if let iconNode = strongSelf.monogramEditedIconNode {
+                            strongSelf.monogramEditedIconNode = nil
                             iconNode.removeFromSupernode()
                         }
                         
