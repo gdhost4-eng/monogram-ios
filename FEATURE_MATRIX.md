@@ -44,30 +44,30 @@
 | Возможность | Статус | Где реализовано |
 | --- | --- | --- |
 | Режим призрака: без «прочитано», онлайна, «печатает…», прочих действий, просмотров историй | ⚪ not tested | `MonogramSettings.swift` (фильтр в `Network.request`), `ManagedAccountPresence`, `ManagedLocalInputActivities`, `SynchronizePeerReadState` |
-| Режим призрака: отправитель не видит «прослушано / просмотрено» (голосовые, кружки, одноразовые медиа) | ⚪ not tested, не собиралось | `ManagedSynchronizeConsumeMessageContentsOperations`, `ManagedLocalInputActivities` |
+| Режим призрака: отправитель не видит «прослушано / просмотрено» (голосовые, кружки, одноразовые медиа) | ⚪ not tested | `ManagedSynchronizeConsumeMessageContentsOperations`, `ManagedLocalInputActivities` |
 | «Прочитано» при ответе и «Прочитать (видно собеседнику)» | ⚪ not tested | `MonogramGhostActions.swift`, `PendingMessageManager`, меню чата в `ChatListUI/ChatContextMenus` |
 | Вход призраком с иконки (долгое нажатие), значок режима рядом с «Изм.» | ⚪ not tested | `ApplicationShortcutItem.swift`, `AppDelegate`, `ChatListController`, `NavigationButtonComponent` |
 | Сохранение удалённых сообщений (значок корзины у времени) | ⚪ not tested | `MonogramMessageAttributes.swift`, `AccountStateManagementUtils` (`DeleteMessages*`), `StringForMessageTimestampStatus`, `ChatMessageDateAndStatusNode` |
-| Сообщения, удалённые таймером автоудаления чата, сохраняются как удалённые | ⚪ not tested, не собиралось | `monogramKeepAutoremovedMessage`, `ManagedAutoremoveMessageOperations` |
-| Список удалённых сообщений чата (профиль → «Удалённые сообщения»), переход к сообщению | ⚪ not tested, не собиралось | `MonogramUI/MonogramDeletedMessagesController`, `engine.messages.monogramDeletedMessages`, `PeerInfoProfileItems` |
-| У удалённого сообщения нет «Ответить», «Закрепить», «Изменить» и реакций; пересылка отправляет копию | ⚪ not tested, не собиралось | `ChatInterfaceStateContextMenus`, `canAddMessageReactions`, `monogramConvertProtectedForwards` |
-| Удалённые сообщения переживают перепроверку истории каналов и перезапись сообщения | ⚪ not tested, не собиралось | `HistoryViewStateValidation`, хук `mergeMessageAttributes` в `SyncCore_StandaloneAccountTransaction` |
+| Сообщения, удалённые таймером автоудаления чата, сохраняются как удалённые | ⚪ not tested | `monogramKeepAutoremovedMessage`, `ManagedAutoremoveMessageOperations` |
+| Список удалённых сообщений чата (профиль → «Удалённые сообщения»), переход к сообщению | ⚪ not tested | `MonogramUI/MonogramDeletedMessagesController`, `engine.messages.monogramDeletedMessages`, `PeerInfoProfileItems` |
+| У удалённого сообщения нет «Ответить», «Закрепить», «Изменить» и реакций; пересылка отправляет копию | ⚪ not tested | `ChatInterfaceStateContextMenus`, `canAddMessageReactions`, `monogramConvertProtectedForwards` |
+| Удалённые сообщения переживают перепроверку истории каналов и перезапись сообщения | ⚪ not tested | `HistoryViewStateValidation`, хук `mergeMessageAttributes` в `SyncCore_StandaloneAccountTransaction` |
 | История изменений сообщений (только текст, до 100 версий) | ⚪ not tested | `MonogramEditHistoryMessageAttribute`, `.EditMessage` replay, `MonogramUI/MonogramEditHistoryController` |
-| Карандаш вместо слова «изменено» у времени сообщения | ⚪ not tested, не собиралось | `ChatMessageDateAndStatusNode` (`monogramEditedIcon`) |
+| Карандаш вместо слова «изменено» у времени сообщения | ⚪ not tested | `ChatMessageDateAndStatusNode` (`monogramEditedIcon`) |
 | Сохранение одноразовых медиа и медиа с таймером (в т.ч. секретные чаты) | ⚪ not tested | `MonogramSelfDestructingMedia.swift`: хук Postbox `SeedConfiguration.preserveExistingMessageMedia`, предзагрузка в `AccountStateManagementUtils`, `ManagedAutoremoveMessageOperations` (секретные чаты) |
 | Снятие запрета на копирование, пересылка копией | ⚪ not tested | `MonogramCopyProtection.swift`, `Message.isCopyProtected`, `Peer.isCopyProtectionEnabled`, `enqueueMessages` |
 | Скрытие рекламы | ⚪ not tested | `AdMessages.swift`, `AdPeers.swift` |
 | ID, примерная дата регистрации, «Копировать ID сообщения» | ⚪ not tested | `MonogramUI/MonogramPeerInfo.swift`, `PeerInfoProfileItems`, `ChatInterfaceStateContextMenus` |
 | Локальные заметки в профилях | ⚪ not tested | `TelegramCore/Sources/Monogram/MonogramPeerNotes.swift` (UserDefaults, per account) |
-| Поиск в списке чатов находит чаты по тексту заметки | ⚪ not tested, не собиралось | `MonogramKit/MonogramSearch`, `MonogramNotesIndex`, `searchLocalPeers(includeMonogramNotes:)`, `ChatListSearchListPaneNode` |
-| Настройки Monogram общие с расширениями (Share, Siri, уведомления) через App Group | ⚪ not tested, не собиралось | `MonogramSettings.defaults`, `MonogramKit/MonogramAppGroup`; без App Group — как раньше |
+| Поиск в списке чатов находит чаты по тексту заметки | ⚪ not tested | `MonogramKit/MonogramSearch`, `MonogramNotesIndex`, `searchLocalPeers(includeMonogramNotes:)`, `ChatListSearchListPaneNode` |
+| Настройки Monogram общие с расширениями (Share, Siri, уведомления) через App Group | ⚪ not tested | `MonogramSettings.defaults`, `MonogramKit/MonogramAppGroup`; без App Group — как раньше |
 | Подтверждение отправки стикеров, GIF, голосовых | ⚪ not tested | `Chat/ChatControllerMonogram.swift`, `ChatController` (sendSticker/sendGif), `dismissMediaRecorder` |
 | Скрытие историй над списком чатов | ⚪ not tested | `ChatListController` |
 | Без лимита на число аккаунтов | ⚪ not tested | `AccountUtils`, экраны выхода и удаления аккаунта |
 
-«Не собиралось» — правка от 2026-10-04, сделанная на Windows; пометка снимается после первой успешной сборки.
+Всё перечисленное собрано в CI 2026-10-04 (коммит `ccd28780`); на устройстве правки этого дня ещё не проверялись.
 
-Чистая логика слоя (поиск по словам, формат ID, оценка даты регистрации, имя App Group, список запросов режима призрака, индекс заметок) вынесена в `submodules/MonogramKit` и покрыта тестами: `swift test --package-path submodules/MonogramKit`. Они запускаются в CI перед сборкой IPA.
+Чистая логика слоя (поиск по словам, формат ID, оценка даты регистрации, имя App Group, список запросов режима призрака, индекс заметок) вынесена в `submodules/MonogramKit` и покрыта тестами: `swift test --package-path submodules/MonogramKit`. Они запускаются в CI перед сборкой IPA (36 тестов, проходят).
 
 ## Расхождения с Monogram для ПК
 
