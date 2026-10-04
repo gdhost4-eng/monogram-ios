@@ -25,7 +25,8 @@ swift_library(
         "//submodules/Emoji",
         "//submodules/TelegramCore/FlatBuffers",
         "//submodules/TelegramCore/FlatSerialization",
-        "//submodules/MurMurHash32"
+        "//submodules/MurMurHash32",
+        "//submodules/MonogramKit:MonogramKit",
     ],
     visibility = [
         "//visibility:public",

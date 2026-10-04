@@ -86,6 +86,13 @@ jobs:
           cp -R $GITHUB_WORKSPACE /Users/Shared/
           mv /Users/Shared/$(basename $GITHUB_WORKSPACE) /Users/Shared/telegram-ios
 
+      - name: Run MonogramKit tests
+        # The Foundation-only logic of the Monogram layer, about a minute with plain SwiftPM.
+        # A failed test is reported on the run but does not cost the IPA.
+        continue-on-error: true
+        run: |
+          swift test --package-path submodules/MonogramKit
+
       - name: Restore Bazel disk cache
         uses: actions/cache/restore@v4
         with:

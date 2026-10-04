@@ -2,11 +2,12 @@ import Foundation
 import SwiftSignalKit
 import TelegramApi
 import MtProtoKit
+import MonogramKit
 
 /// Global (not per-account) Monogram client settings.
 ///
-/// Values live in `UserDefaults.standard` under the `monogram.` prefix and are cached in memory,
-/// so reads are cheap enough for hot paths (typing, read receipts, message layout).
+/// Values live in `UserDefaults` under the `monogram.` prefix (see `defaults` for which one) and are
+/// cached in memory, so reads are cheap enough for hot paths (typing, read receipts, message layout).
 public final class MonogramSettings {
     public enum Key: String, CaseIterable {
         // Ghost mode: the master switch and what exactly it hides.
@@ -57,6 +58,35 @@ public final class MonogramSettings {
         }
     }
 
+    private static let migratedToAppGroupKey = "monogram.migratedToAppGroup"
+    
+    /// The settings are shared with the app extensions (Share, Siri, notifications) through the App Group,
+    /// so that an extension does not act as if ghost mode were off. Some sideload re-signing drops the
+    /// App Group; then every process keeps its own defaults, as it was before the settings became shared.
+    private static let defaults: UserDefaults = {
+        let standard = UserDefaults.standard
+        let bundlePath = Bundle.main.bundlePath
+        guard let groupName = MonogramAppGroup.name(bundleIdentifier: Bundle.main.bundleIdentifier, bundlePath: bundlePath) else {
+            return standard
+        }
+        if FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupName) == nil {
+            return standard
+        }
+        guard let shared = UserDefaults(suiteName: groupName) else {
+            return standard
+        }
+        // What was saved before the settings became shared is in the main app's own defaults.
+        if !MonogramAppGroup.isExtension(bundlePath: bundlePath) && !shared.bool(forKey: MonogramSettings.migratedToAppGroupKey) {
+            for key in MonogramSettings.Key.allCases {
+                if shared.object(forKey: key.defaultsKey) == nil && standard.object(forKey: key.defaultsKey) != nil {
+                    shared.set(standard.bool(forKey: key.defaultsKey), forKey: key.defaultsKey)
+                }
+            }
+            shared.set(true, forKey: MonogramSettings.migratedToAppGroupKey)
+        }
+        return shared
+    }()
+    
     private static let lock = NSLock()
     private static var cache: [Key: Bool] = [:]
     private static let version = ValuePromise<Int>(0, ignoreRepeated: false)
@@ -71,8 +101,8 @@ public final class MonogramSettings {
             return value
         }
         let value: Bool
-        if UserDefaults.standard.object(forKey: key.defaultsKey) != nil {
-            value = UserDefaults.standard.bool(forKey: key.defaultsKey)
+        if self.defaults.object(forKey: key.defaultsKey) != nil {
+            value = self.defaults.bool(forKey: key.defaultsKey)
         } else {
             value = key.defaultValue
         }
@@ -84,7 +114,7 @@ public final class MonogramSettings {
         self.lock.lock()
         let changed = self.cache[key] != value
         self.cache[key] = value
-        UserDefaults.standard.set(value, forKey: key.defaultsKey)
+        self.defaults.set(value, forKey: key.defaultsKey)
         self.currentVersion += 1
         let version = self.currentVersion
         self.lock.unlock()
@@ -161,25 +191,9 @@ public enum MonogramGhost {
         self.bypassLock.unlock()
     }
 
-    private static let readRequestNames: Set<String> = [
-        "messages.readHistory",
-        "channels.readHistory",
-        "messages.readDiscussion",
-        "messages.readSavedHistory",
-        "messages.readEncryptedHistory"
-    ]
-
-    private static let storyRequestNames: Set<String> = [
-        "stories.readStories",
-        "stories.incrementStoryViews"
-    ]
-
     /// Called by `Network` for every outgoing request. Returns true when the request must not reach the server.
     static func shouldSuppressRequest(_ description: FunctionDescription) -> Bool {
-        let name = description.name
-        let isRead = self.readRequestNames.contains(name)
-        let isStory = !isRead && self.storyRequestNames.contains(name)
-        if !isRead && !isStory {
+        guard let kind = MonogramGhostRequests.kind(ofRequestNamed: description.name) else {
             return false
         }
 
@@ -190,9 +204,10 @@ public enum MonogramGhost {
             return false
         }
 
-        if isRead {
+        switch kind {
+        case .readReceipt:
             return self.blocksReadReceipts
-        } else {
+        case .storyView:
             return self.blocksStoryViews
         }
     }

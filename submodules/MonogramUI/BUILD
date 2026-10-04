@@ -17,6 +17,7 @@ swift_library(
         "//submodules/PromptUI:PromptUI",
         "//submodules/UndoUI:UndoUI",
         "//submodules/TextFormat:TextFormat",
+        "//submodules/MonogramKit:MonogramKit",
     ],
     visibility = [
         "//visibility:public",
