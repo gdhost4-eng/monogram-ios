@@ -1,38 +1,63 @@
 # Changelog
 
-Все заметные изменения Monogram документируются в этом файле. Проект следует непрерывному changelog до появления формальной release-схемы.
+Все заметные изменения Monogram документируются в этом файле. Проект следует непрерывному changelog до появления формальной release-схемы. Новые записи — сверху.
 
-## Unreleased
+## 2026-10-04
 
-### Added
+Правки этого дня сделаны на Windows и ещё не проверены сборкой.
 
-- Подготовлен официальный Telegram-iOS 12.9.2 на commit `6ad963e5b62d354da79040f388ae2b9132fb17b8` со всеми зафиксированными submodules.
-- Созданы `PROJECT_STATUS.md`, `FEATURE_MATRIX.md`, `UPSTREAM.md`, `ARCHITECTURE.md` и `SECURITY.md` как долговременная память проекта.
-- Зафиксирована исходная карта Telegram app/framework/extension targets.
-- Зафиксирована архитектура dynamic account records и расположение трёх UI gates лимита 3/4 аккаунта.
-- Добавлен `MonogramCore`: typed feature registry, settings schema v1, migrations, experimental flags, global/per-account persistence и no-limit account policy.
-- Добавлен `MonogramUI` с экраном Advanced Settings и отдельными global/current-account/experimental секциями.
-- Добавлены MonogramCore unit tests и включение в общий Bazel test suite.
-- Добавлены безопасный configuration example и инструкция `MONOGRAM_CONFIGURATION.md`.
-- Добавлен fail-fast validator Monogram-конфигурации и portable unit tests без вывода секретов.
-- Добавлен portable regression test, запрещающий повторное появление account-limit gate 3/4 в известных add-account paths.
-- Добавлены account-local Postbox repositories для message bookmarks и peer notes/tags: наблюдение, upsert/remove, поиск и нормализация тегов без фиксированного лимита.
-- Добавлена privacy policy, запрещающая сохранять secret-chat, ephemeral и copy-protected message references и secret-chat peer annotations.
-- Добавлены Swift model/policy tests и portable source invariants для custom collection IDs, reference-only bookmark model и обязательных privacy gates.
-- В message context menu добавлено feature-gated действие добавления/удаления локальной закладки с повторной проверкой privacy policy перед записью.
-- В Advanced Settings добавлены реактивный счётчик и account-local экран закладок; выбор записи открывает исходное сообщение штатной навигацией.
-- Добавлен редактор bookmark note/tags с единым parser разделителей, сохранением, действием открытия сообщения и подтверждаемым удалением локальной записи.
-- Экран bookmarks получил реактивный account-local поиск по note/tag, поддержку `#tag`-запросов и отдельное состояние отсутствия результатов.
+### Fixed
+
+- Режим призрака: отправитель больше не видит, что голосовое прослушано, кружок просмотрен или одноразовое медиа открыто. Раньше это уходило на сервер запросом `readMessageContents` в обход блокировки «прочитано» (в ПК-версии было закрыто).
+- Удалённые сообщения больше не пропадают при перепроверке истории каналов и супергрупп после долгого простоя (`channelDifferenceTooLong`). Сообщения, удалённые за время простоя, сохраняются с пометкой, а не исчезают молча.
+- Правки, сделанные за время простоя, попадают в историю изменений.
+- Пометка «удалено» и история изменений переносятся при любой перезаписи сообщения серверной копией (хук `mergeMessageAttributes`).
+- В пример конфигурации и в список заглушек валидатора возвращён `api_hash`: пример не проходил собственную проверку, тест `test_tracked_example_structure` падал.
+- `ApplicationContext.swift` снова хранится с LF: коммит `1d6ef615` заменил окончания всех строк, из-за чего правка на 4 строки выглядела как 1013.
 
 ### Changed
 
-- Официальный Git remote переименован из `origin` в `upstream`.
-- Для локального checkout включён `core.longpaths`, необходимый для upstream assets на Windows.
-- Пользовательский display name изменён с Telegram на Monogram; внутренние target names сохранены для совместимости с upstream.
-- Удалены все пять найденных UI gate и обе константы 3/4 подключённых аккаунта; server-side Premium semantics не изменялись.
+- В `.gitattributes` для `*.swift`, `*.bzl`, `*.yml`, `BUILD`, `BUILD.bazel` задан `text eol=lf`.
+- Убрана временная диагностика `MonogramDebug` из конвейера открытия чата (откат `0366b2ab` и `fdd1588a`): причина зависания найдена и исправлена в `1d6ef615`.
+- `PROJECT_STATUS.md`, `ARCHITECTURE.md`, `FEATURE_MATRIX.md`, `UPSTREAM.md` и этот файл приведены в соответствие с кодом: в них описывался слой `MonogramCore`, удалённый 2026-09-23.
 
-### Known limitations
+## 2026-09-23 — 2026-09-27
 
-- Baseline build и runtime parity ещё не проверены: текущий хост Windows не предоставляет Xcode/iOS SDK.
-- `origin` для репозитория Monogram ещё не настроен.
-- Собственные API/signing credentials отсутствуют; реальные secrets не добавлялись.
+### Added
+
+- Слой Monogram перенесён из Monogram для ПК (`10dcbb7c`): режим призрака, сохранение удалённых сообщений, история изменений, снятие запрета на копирование и пересылка копией, скрытие рекламы и историй, ID и примерная дата регистрации, локальные заметки, подтверждение отправки стикеров, GIF и голосовых. Раздел **Настройки → Monogram**.
+- Сохранение одноразовых медиа и медиа с таймером, включая секретные чаты (`7a6536ce`).
+- Иконка Monogram, в том числе для тёмного, тонированного и прозрачного режимов iOS; «Telegram» в строках интерфейса заменяется на «Monogram» (`49cd8840`, `d89ef239`).
+- Значок корзины у времени удалённого сообщения вместо эмодзи, значок режима призрака рядом с «Изм.» в списке чатов (`d89ef239`, `e98e6b28`).
+- `AGENTS.md` с правилами запуска сборки (`0f6311c2`).
+
+### Changed
+
+- Снято ограничение на число аккаунтов (`3967d858`).
+- Выбор иконки приложения убран из настроек и из поиска по настройкам, чтобы не сбросить иконку Monogram (`07f6d860`).
+- CI: кэш Bazel между сборками, самоподписанные профили под bundle id сборки, `api_hash` передаётся в `BuildConfig`, сборка с `--continueOnError` (`1cfb3c82`, `ad2650c0`, `84be8389`).
+- URL сабмодулей `rlottie` и `tgcalls` заменены на абсолютные (`4435b955`).
+
+### Removed
+
+- Первый слой Monogram: модуль `MonogramCore`, закладки сообщений, теги и заметки на `OrderedItemList`, экран Advanced Settings, `MonogramAccountPolicy` и их тесты (`10dcbb7c`).
+
+### Fixed
+
+- Зависание при открытии чатов из-за значка удалённого сообщения, вставленного в текст даты через `CTRunDelegate` (`f0480c33`).
+- Чаты и архив не открывались, пока не получен доступ к контактам (`1d6ef615`).
+- Возвращены потерянные при слиянии исправления: `shortenerUrl` в `TGShareLocationSignals.m` и запуск без App Group (`df2e6db2`).
+
+## 2026-09-01 — 2026-09-04
+
+### Added
+
+- Официальный Telegram-iOS 12.9.2 как основа, все зафиксированные submodules.
+- Сборка IPA в GitHub Actions с Windows-хоста, режим сборки для установки через переподпись.
+- Пример конфигурации `build-system/monogram-development-configuration.example.json`, валидатор `scripts/validate_monogram_configuration.py` и его тесты, инструкция `MONOGRAM_CONFIGURATION.md`.
+- `PROJECT_STATUS.md`, `FEATURE_MATRIX.md`, `UPSTREAM.md`, `ARCHITECTURE.md` и `SECURITY.md`.
+- Первый слой Monogram (`MonogramCore`, Advanced Settings, закладки, заметки и теги) — удалён 2026-09-23.
+
+### Changed
+
+- Официальный remote переименован в `upstream`; пользовательское имя приложения — Monogram, внутренние имена целей сохранены.

@@ -43,7 +43,7 @@ python3 build-system/Make/Make.py \
   --outputBuildArtifactsPath=build
 ```
 
-Для реального iPhone требуется корректная development/ad-hoc подпись. IPA, собранный с `fake-codesigning`, предназначен только для CI-проверки и не устанавливается на устройство.
+Для реального iPhone требуется корректная development/ad-hoc подпись. IPA с временной CI-подписью сам по себе на устройство не ставится: его нужно переподписать при установке (см. следующий раздел).
 
 ## Сборка с Windows через GitHub Actions
 
@@ -60,8 +60,12 @@ GitHub Actions выполняет сборку на macOS 26 с Xcode 26.2, по
 4. В GitHub откройте **Settings → Secrets and variables → Actions → New repository secret**, задайте имя `MONOGRAM_CONFIGURATION_BASE64` и вставьте значение из буфера.
 5. Откройте **Actions → CI → Run workflow**. После успешного выполнения скачайте `Monogram-IPA-<номер>` из блока **Artifacts**. В архиве находится `Telegram.ipa`.
 
+Вместо шагов 2–4 достаточно двух secrets: `TELEGRAM_API_ID` и `TELEGRAM_API_HASH`. Тогда workflow сам собирает конфигурацию; `bundle_id`, `team_id` и URL-схему можно переопределить переменными репозитория `MONOGRAM_BUNDLE_ID`, `MONOGRAM_TEAM_ID`, `MONOGRAM_URL_SCHEME` (по умолчанию `org.monogram.Monogram`, команда из самоподписанного сертификата и `monogram`). Если задан `MONOGRAM_CONFIGURATION_BASE64`, используется он.
+
+Workflow запускается и вручную, и при каждом push в `master`. Сборка занимает от 15 минут с прогретым кэшем Bazel до нескольких часов с пустым. Правила запуска — в `AGENTS.md`.
+
 IPA собирается с временной CI-подписью. PlumeImpactor при установке переподпишет его вашим Apple ID или сертификатом.
 
 ## Branding
 
-Пользовательское имя приложения — Monogram. Внутренние Bazel/Xcode target names могут оставаться upstream-именами `Telegram`, чтобы уменьшить конфликты при синхронизации. Перед распространением официальный Telegram app icon должен быть заменён на самостоятельную иконку Monogram.
+Пользовательское имя приложения — Monogram. Внутренние Bazel/Xcode target names могут оставаться upstream-именами `Telegram`, чтобы уменьшить конфликты при синхронизации. Иконка приложения — собственная иконка Monogram; выбор альтернативных иконок Telegram из настроек убран.

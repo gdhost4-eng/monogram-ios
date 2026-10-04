@@ -1,10 +1,12 @@
 # Monogram — архитектура
 
-Последнее обновление: 2026-09-01
+Последнее обновление: 2026-10-04
 
 ## Принцип
 
-Telegram-iOS остаётся фундаментом. Monogram добавляет типизированный custom layer и минимальные интеграционные патчи; он не дублирует MTProto, Postbox, message renderer или существующие Telegram flows.
+Telegram-iOS остаётся фундаментом. Monogram добавляет небольшой собственный слой и точечные правки в файлах upstream; он не дублирует MTProto, Postbox, отрисовку сообщений или существующие экраны Telegram. Чем меньше строк изменено в файлах upstream, тем дешевле следующее слияние.
+
+Функции повторяют Monogram для ПК (`monogram-pc/tdesktop/Telegram/SourceFiles/monogram`). Если поведение на iOS и на ПК расходится без причины, эталон — ПК-версия.
 
 ## Карта upstream
 
@@ -25,73 +27,78 @@ Telegram-iOS остаётся фундаментом. Monogram добавляе�
 | Themes/localization | `TelegramPresentationData`, `TelegramUIPreferences`, generated presentation strings | Themes, wallpaper, fonts and localized UI |
 | iOS extensions | Share, Notification Service/Content, Widget, Siri Intents, Broadcast Upload, Watch | System integration targets |
 
-## Account/session architecture
+## Аккаунты
 
-`AccountManager` хранит `AccountRecord` и current/auth records. Каждый авторизованный `Account` создаётся через `accountWithId` и получает собственные Postbox, MediaBox, network/session state и preferences. `SharedAccountContextImpl` наблюдает records, динамически добавляет/удаляет contexts и сортирует их через `AccountSortOrderAttribute`.
+`AccountManager` хранит `AccountRecord`, каждый авторизованный `Account` получает собственные Postbox, MediaBox, сеть и настройки; `SharedAccountContextImpl` добавляет и удаляет контексты динамически. Фиксированного массива на 3/4 аккаунта в ядре нет — лимит жил только в UI. Он снят: `maximumNumberOfAccounts` и `maximumPremiumNumberOfAccounts` в `AccountUtils` равны `Int.max`, а экраны выхода, удаления аккаунта и настроек читают эти константы вместо чисел 3 и 4. Серверные ограничения и Premium это не меняет.
 
-Технического фиксированного массива на 3/4 аккаунта в manager/context не найдено. Ограничение находилось в пяти UI paths и двух константах `AccountUtils`:
+## Слой Monogram
 
-- `SettingsUI/Sources/LogoutOptionsController.swift`
-- `SettingsUI/Sources/DeleteAccountOptionsController.swift`
-- `TelegramUI/Components/PeerInfo/PeerInfoScreen/Sources/PeerInfoScreenSettingsActions.swift`
-- `SettingsUI/Sources/Search/SettingsSearchableItems.swift`
-- `AccountUtils/Sources/AccountUtils.swift`
+### Ядро: `submodules/TelegramCore/Sources/Monogram/`
 
-Эти gate удалены и заменены `MonogramAccountPolicy`; изменение должно быть подтверждено нагрузочными тестами. Оно не меняет Telegram Premium entitlements или server-side limits, не связанные с локальным числом подключённых accounts.
+Часть модуля `TelegramCore`, поэтому без UIKit и Display (TelegramCore общий с macOS-клиентом).
 
-## Custom layer
+| Файл | Что делает |
+| --- | --- |
+| `MonogramSettings.swift` | Все переключатели (`MonogramSettings.Key`), проверки режима призрака (`MonogramGhost`), фильтр исходящих запросов |
+| `MonogramGhostActions.swift` | «Прочитать (видно собеседнику)», действия после отправки сообщения в режиме призрака |
+| `MonogramMessageAttributes.swift` | Атрибуты «удалено» и «история изменений», их сохранение при удалении, правке и перезаписи сообщения |
+| `MonogramSelfDestructingMedia.swift` | Одноразовые медиа и медиа с таймером остаются в чате, предзагрузка при получении |
+| `MonogramCopyProtection.swift` | Снятие запрета на копирование, пересылка защищённого сообщения копией |
 
-### `MonogramCore` — создан
+### Интерфейс: `submodules/MonogramUI/`
 
-Низкоуровневый модуль без UI:
+Отдельный Bazel-модуль, зависит от `TelegramCore` и общих UI-модулей; от него зависят `TelegramUI` и `PeerInfoScreen`.
 
-- schema/version migrations (schema v1);
-- global/per-account settings models и отдельные persistence keys;
-- feature and experimental flags с typed registry;
-- local bookmarks/notes/tags repositories;
-- privacy-safe logging/redaction;
-- account-add policy без фиксированного application maximum.
+| Файл | Что делает |
+| --- | --- |
+| `MonogramSettingsController.swift` | Экран «Настройки → Monogram» |
+| `MonogramEditHistoryController.swift` | Экран истории изменений сообщения |
+| `MonogramPeerInfo.swift` | ID в формате ботов, примерная дата регистрации, локальные заметки и их редактор |
 
-Зависимости должны быть минимальными: Foundation, SwiftSignalKit, Postbox и TelegramCore только там, где это необходимо. Модуль не должен зависеть от TelegramUI.
+`submodules/TelegramUI/Sources/Chat/ChatControllerMonogram.swift` — подтверждение отправки стикеров и GIF.
 
-### `MonogramUI` — создан
+## Как это встроено
 
-UI-интеграция:
+Режим призрака перехватывает запросы в двух местах. Общий фильтр стоит в `Network.request`: по имени функции он гасит отметки о прочтении (`messages.readHistory`, `channels.readHistory`, `messages.readDiscussion`, `messages.readSavedHistory`, `messages.readEncryptedHistory`) и просмотры историй (`stories.readStories`, `stories.incrementStoryViews`). Запрос, который должен пройти несмотря на режим, заранее разрешается через `MonogramGhost.allowRequest`. Остальное отключается там, где запрос рождается:
 
-- Advanced Settings с global/current-account/experimental sections;
-- appearance controls;
-- chat list/search additions;
-- context-menu and message actions;
-- local bookmark/note/tag screens;
-- power-user/debug presentation.
+| Что скрывается | Где |
+| --- | --- |
+| Онлайн | `ManagedAccountPresence` шлёт `offline: true`, таймер продолжает работать |
+| «Печатает…» и прочие действия | `ManagedLocalInputActivities.monogramGhostBlocksActivity` |
+| «Прослушано / просмотрено» | `ManagedSynchronizeConsumeMessageContentsOperations` отбрасывает операцию |
+| Счётчик непрочитанного после локального чтения | `SynchronizePeerReadState` не повторяет запрос, которого сервер не получит |
+| Онлайн после отправки сообщения | `PendingMessageManager` → `monogramGhostDidSendMessage` |
 
-Он может зависеть от `MonogramCore`, Telegram presentation/UI abstractions и SettingsUI, но не должен создавать обратных зависимостей.
+Имя `readMessageContents` в общий фильтр не добавлено намеренно: тем же запросом клиент гасит упоминания и реакции, и блокировка по имени ломала бы эти счётчики.
 
-## Правила persistence
+Сохранение того, что пытаются забрать, держится на двух хуках `SeedConfiguration` в Postbox (`telegramPostboxSeedConfiguration`):
 
-- Global settings: account-manager shared data, custom key `0x4d4f4e01`.
-- Per-account settings: account-specific preferences/Postbox с отдельной таблицей и тем же namespaced key value.
-- Per-chat settings: account Postbox keyed by `PeerId`.
-- Message bookmarks: отдельная Postbox `OrderedItemList` collection `0x4d4f4201`; запись содержит только `MessageId`, локальную заметку, нормализованные теги и `Int64` timestamps, без копии текста/медиа сообщения.
-- Peer notes/tags: отдельная Postbox `OrderedItemList` collection `0x4d4f4202`, keyed by `PeerId`, с наблюдаемым списком, upsert/remove и локальным поиском.
-- Обе коллекции не имеют искусственного tail limit и физически изолированы Postbox текущего account.
-- Secret-chat, ephemeral и copy-protected message references запрещены `MonogramLocalDataPolicy`; peer annotations для secret chats также запрещены.
-- Secret/self-destructing content: не копировать в custom persistence вопреки Telegram semantics.
-- Любой новый ключ имеет default value и безопасно игнорирует неизвестные поля.
+- `mergeMessageAttributes` (штатный хук upstream) — при любой перезаписи сообщения переносит атрибуты «удалено» и «история изменений» из прежней версии;
+- `preserveExistingMessageMedia` (добавлен Monogram) — не даёт затереть фото или файл заглушкой `TelegramMediaExpiredContent`.
 
-## Extension points
+Точки, где сообщение удаляется или меняется по команде сервера:
 
-1. `Telegram/BUILD` — подключение Monogram targets к app/UI graph.
-2. Settings root/search — одна точка входа в Advanced Settings.
-3. Account-add actions — общий policy helper вместо трёх копий gate logic.
-4. Chat context menu — добавление custom actions через локальный registry.
-5. Presentation data/preferences — appearance overrides поверх upstream defaults.
-6. Postbox/account manager — только versioned local data adapters; не менять core message tables без необходимости.
+| Событие | Где | Что делает Monogram |
+| --- | --- | --- |
+| Удаление, пришедшее обновлением | `AccountStateManagementUtils` (`DeleteMessages`, `DeleteMessagesWithGlobalIds`) | `monogramKeepDeletedMessages` помечает вместо удаления |
+| Удаление, найденное при перепроверке истории канала | `HistoryViewStateValidation` | `monogramKeepMessageRemovedByValidation` помечает и обновляет версию состояния канала |
+| Правка, пришедшая обновлением или найденная при перепроверке | `AccountStateManagementUtils` (`EditMessage`), `HistoryViewStateValidation` | `monogramAttributesForEdit` дописывает прежний текст в историю |
+| Истечение таймера в секретном чате | `ManagedAutoremoveMessageOperations` | `monogramKeepExpiredSecretMessage` снимает таймер, медиа остаётся |
 
-Bookmark action в message context menu читает account-scoped feature flag и снимок соответствующей записи. Для одного допустимого сообщения он выполняет локальный upsert/remove; secret, ephemeral и copy-protected сообщения не получают эту action.
+То, что пользователь удаляет на этом устройстве, идёт мимо этих точек (`DeleteMessagesInteractively`) и удаляется по-настоящему. Удаление своего сообщения с другого устройства приходит обычным обновлением и сохраняется с пометкой, как и чужое.
 
-Bookmarks list и editor находятся в `MonogramUI`. Editor пишет note/tags только через `MonogramCore`, повторно использует единый parser/normalizer тегов и требует стандартного destructive confirmation перед удалением локальных данных.
+Остальные точки входа: меню чата в списке (`ChatListUI/ChatContextMenus`), меню сообщения (`ChatInterfaceStateContextMenus`), профиль (`PeerInfoProfileItems`), раздел настроек (`PeerInfoSettingsItems`, `PeerInfoScreenSettingsActions`), значок режима рядом с «Изм.» (`ChatListController`, `NavigationButtonComponent`), быстрые действия иконки (`ApplicationShortcutItem`, `AppDelegate`), пометка удалённого сообщения (`StringForMessageTimestampStatus`, `ChatMessageDateAndStatusNode`), реклама (`AdMessages`, `AdPeers`), защита от копирования (`MessageUtils`, `PeerUtils`, `EnqueueMessage`).
 
-## Failure isolation
+## Хранение
 
-Custom settings и локальные функции должны возвращать defaults при повреждённых/неизвестных данных. Ошибка Monogram-функции не должна блокировать авторизацию, синхронизацию, отправку/приём сообщений или открытие основного Telegram UI.
+- **Настройки** — `UserDefaults.standard`, ключи `monogram.<имя>`, общие для всех аккаунтов. Значения кэшируются в памяти, чтение дешёвое и безопасно в горячих путях. Расширения приложения читают собственный `UserDefaults` и видят значения по умолчанию.
+- **Заметки** — `UserDefaults.standard`, ключ `monogram.note.<аккаунт>.<собеседник>`.
+- **Удалённые сообщения и история изменений** — атрибуты `MonogramDeletedMessageAttribute` и `MonogramEditHistoryMessageAttribute` на самом сообщении в Postbox, зарегистрированы в `AccountManager.swift`. Отдельной базы, как в ПК-версии, нет. История ограничена 100 версиями и хранит только текст.
+- Новый ключ настроек обязан иметь значение по умолчанию в `MonogramSettings.Key.defaultValue`.
+
+## Правила для правок
+
+- Исходники в репозитории хранятся с LF (`.gitattributes`). Правка, сохранённая с CRLF, превращает изменение одной строки в замену всего файла и ломает слияние с upstream.
+- В файлах upstream правка помечается комментарием `// Monogram:` с объяснением, зачем она нужна.
+- Логика выносится в файлы слоя Monogram, в файле upstream остаётся один вызов.
+- Сбой функции Monogram не должен мешать авторизации, синхронизации, отправке и приёму сообщений: при неожиданных данных хелперы возвращают управление штатному коду (`return false`, `return nil`, исходный список).

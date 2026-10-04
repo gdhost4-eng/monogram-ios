@@ -1,67 +1,81 @@
 # Monogram — синхронизация с upstream
 
-Последнее обновление: 2026-09-01
+Последнее обновление: 2026-10-04
 
 ## Зафиксированная база
 
-- Repository: `https://github.com/TelegramMessenger/Telegram-iOS.git`
-- Remote: `upstream`
-- Branch: `master`
-- Commit: `6ad963e5b62d354da79040f388ae2b9132fb17b8`
-- Telegram iOS: `12.9.2`
-- Xcode: `26.2`
-- Bazel: `8.4.2`
-- macOS: `26`
+- Repository: `https://github.com/TelegramMessenger/Telegram-iOS.git`, remote `upstream`, ветка `master`.
+- Telegram iOS `12.9.2`, Xcode `26.2`, Bazel `8.4.2`, macOS `26`.
+- База — коммит «Merge branch 'master' into beta» от 2026-07-17. На GitHub у него хеш `6ad963e5b62d354da79040f388ae2b9132fb17b8`, и на 2026-10-04 это по-прежнему вершина `upstream/master`: синхронизировать пока нечего.
 
-Первоначальный checkout выполнен с `--depth 1`; все commit IDs submodules сохранены в superproject. При необходимости анализа старой истории shallow-граница расширяется адресно.
+### История не связана с upstream
+
+В этом репозитории тот же коммит записан как `b0bec555` — корневой, без родителей, и с другим деревом (`1100f0fb…` против `7e4b2d09…` у `6ad963e5`). Репозиторий начинался с неполного клона, и общей истории с upstream у него нет. Отсюда два следствия:
+
+- `git merge upstream/master` после обычного `git fetch` не найдёт общего предка. Понадобится либо `--allow-unrelated-histories` с разбором конфликтов по всему дереву, либо перенос правок Monogram поверх свежего клона upstream. Второй путь чище: правок немного, и они перечислены ниже.
+- Чем различаются два дерева, не выяснено. Перед первым слиянием это нужно проверить (`git diff b0bec555 6ad963e5 --stat` после fetch), иначе разница попадёт в конфликты вперемешку с настоящими изменениями upstream.
 
 ## Remotes
 
-- `upstream` — только официальный TelegramMessenger/Telegram-iOS.
-- `origin` — должен указывать на репозиторий Monogram; пока не настроен, потому что URL не предоставлен.
+- `upstream` — только официальный TelegramMessenger/Telegram-iOS. Коммиты Monogram туда не отправляются.
+- `origin` — `https://github.com/gdhost4-eng/monogram-ios.git`.
 
-Не отправлять custom commits в `upstream`. Push URL для официального remote перед первым production workflow следует отключить или заменить на `DISABLED`.
+## Политика правок
 
-## Политика custom changes
+1. Новая логика размещается в `submodules/TelegramCore/Sources/Monogram/` и `submodules/MonogramUI/`.
+2. В файлах upstream остаётся минимальная точка встраивания — обычно один вызов и комментарий `// Monogram:` с причиной.
+3. Исходники хранятся с LF (`.gitattributes`). Файл, сохранённый с CRLF, даёт дифф на все строки и гарантированный конфликт при слиянии.
+4. Серверные права, Premium и семантика Telegram API не подменяются.
 
-1. Новая функциональность размещается в `MonogramCore`/`MonogramUI` или другом явно выделенном Monogram-модуле.
-2. Upstream-файлы меняются только в минимальных extension points.
-3. Причина каждого upstream-патча документируется в этом файле и `CHANGELOG.md`.
-4. Если уместно, рядом с нетривиальным патчем ставится короткий комментарий `MONOGRAM:`; бессодержательные маркеры не добавляются.
-5. Server-side entitlements, Telegram API semantics и security behavior не подменяются.
+## Текущие правки в файлах upstream
 
-## Процесс обновления
+Список получен командой `git diff --name-status b0bec555 master` и сгруппирован по назначению.
 
-1. Убедиться, что рабочее дерево чистое и все Monogram tests проходят.
-2. Получить `upstream/master` и release tags.
-3. Изучить `versions.json`, `.gitmodules`, build-system и изменения ключевых extension points.
-4. Создать отдельную integration-ветку от текущей Monogram-ветки.
-5. Merge нового upstream commit; не переписывать опубликованную историю без необходимости.
-6. Разрешить конфликты минимально, сохраняя upstream semantics.
-7. Синхронизировать и обновить submodules на commit IDs из upstream.
-8. Сгенерировать Xcode project с собственной конфигурацией Monogram.
-9. Выполнить build, unit tests и smoke matrix.
-10. Обновить `FEATURE_MATRIX.md`, `PROJECT_STATUS.md`, этот файл и `CHANGELOG.md`.
+**Сборка и конфигурация**
 
-## Текущие upstream-патчи
+- `.github/workflows/build.yml` — сборка IPA на macOS-исполнителе с самоподписанными профилями и кэшем Bazel.
+- `.gitmodules` — абсолютные URL для `rlottie` и `tgcalls` вместо относительных.
+- `build-system/Make/BuildConfiguration.py`, `build-system/example-configuration/variables.bzl`, `submodules/BuildConfig/BUILD` — `api_hash` передаётся в `BuildConfig` из конфигурации.
+- `.gitignore`, `.gitattributes` — локальная конфигурация и подпись вне Git; LF для исходников.
+- `submodules/ShareItems/Impl/Sources/TGShareLocationSignals.m` — определён `shortenerUrl`, без которого файл не компилировался.
 
-- `Telegram/BUILD`: пользовательский display name изменён на Monogram.
-- `Telegram/Telegram-iOS/en.lproj/Localizable.strings`: добавлены строки Advanced Settings.
-- `submodules/TelegramUI/BUILD` и `submodules/SettingsUI/BUILD`: подключены Monogram-модули.
-- PeerInfo Settings: добавлена точка входа Advanced Settings.
-- Пять add-account UI paths: удалены gate 3/4 и подключена `MonogramAccountPolicy`; константы 3/4 удалены из `AccountUtils`.
-- `Tests/AllTests/BUILD`: добавлен MonogramCore test target.
-- `.gitignore`: защищены локальная Monogram-конфигурация и signing directory.
+**Название и иконка**
 
-Вся новая логика находится в `submodules/MonogramCore` и `submodules/MonogramUI`; перечисленные upstream-патчи являются интеграционными точками.
+- `Telegram/BUILD`, `Telegram/Telegram-iOS/*.lproj/InfoPlist.strings`, `Telegram/Share` и `Telegram/WidgetKitWidget` (`Localizable.strings`), `Telegram/SiriIntents/IntentHandler.swift` — имя Monogram.
+- `Telegram/Telegram-iOS`: `Telegram.icon`, `AppIcons.xcassets`, `DefaultAppIcon.xcassets`, `BlueIcon.alticon` — собственная иконка; `TelegramUI/Images.xcassets/Chat List/GhostModeIcon.imageset` — значок режима призрака.
+- `build-system/GenerateStrings/GenerateStrings.py` — в строках интерфейса «Telegram» заменяется на «Monogram» на лету, включая языковые пакеты с сервера; названия сервисов (Premium, Stars…), @имена и домены не трогаются.
+- `SettingsUI/Sources/Themes/ThemeSettingsController.swift`, `SettingsUI/Sources/Search/SettingsSearchableItems.swift` — выбор иконки приложения скрыт.
+
+**Аккаунты**
+
+- `AccountUtils/Sources/AccountUtils.swift`, `SettingsUI/Sources/LogoutOptionsController.swift`, `SettingsUI/Sources/DeleteAccountOptionsController.swift`, `PeerInfoScreenSettingsActions.swift` — снят лимит в 3/4 аккаунта.
+
+**Запуск и навигация**
+
+- `TelegramUI/Sources/AppDelegate.swift` — запуск без App Group, быстрые действия режима призрака.
+- `TelegramUI/Sources/ApplicationContext.swift` — готовность экрана чата не ждёт доступа к контактам.
+
+**Функции Monogram** — точки встраивания, описанные в `ARCHITECTURE.md`:
+
+- Postbox: `SeedConfiguration.swift`, `MessageHistoryTable.swift` (хук `preserveExistingMessageMedia`).
+- TelegramCore: `Account/AccountManager.swift`, `Network/Network.swift`, `PendingMessages/EnqueueMessage.swift`, `State/AccountStateManagementUtils.swift`, `State/HistoryViewStateValidation.swift`, `State/ManagedAccountPresence.swift`, `State/ManagedAutoremoveMessageOperations.swift`, `State/ManagedLocalInputActivities.swift`, `State/ManagedSynchronizeConsumeMessageContentsOperations.swift`, `State/PendingMessageManager.swift`, `State/SynchronizePeerReadState.swift`, `SyncCore/SyncCore_StandaloneAccountTransaction.swift`, `TelegramEngine/Messages/AdMessages.swift`, `TelegramEngine/Messages/TelegramEngineMessages.swift`, `TelegramEngine/Peers/AdPeers.swift`, `Utils/MessageUtils.swift`, `Utils/PeerUtils.swift`.
+- ChatListUI: `ChatContextMenus.swift`, `ChatListController.swift`.
+- TelegramUI: `BUILD`, `ChatController.swift`, `ChatControllerContentData.swift`, `ChatHistoryListNode.swift`, `ChatInterfaceStateContextMenus.swift`, `Chat/ChatControllerMediaRecording.swift`, `ApplicationShortcutItem.swift`, `Components/Chat/ChatMessageDateAndStatusNode` (два файла), `Components/ChatListHeaderComponent/Sources/NavigationButtonComponent.swift`, `Components/PeerInfo/PeerInfoScreen` (`BUILD`, `PeerInfoProfileItems.swift`, `PeerInfoScreen.swift`, `PeerInfoSettingsItems.swift`).
 
 ## Ожидаемые конфликтные зоны
 
-- `Telegram/BUILD` и зависимости app/UI targets.
-- Settings entry point и Settings search index.
-- UI actions добавления аккаунта.
-- Chat context menus и presentation preferences.
-- App configuration/product naming/assets.
+`ChatController.swift`, `ChatHistoryListNode.swift`, `ChatListController.swift`, `AccountStateManagementUtils.swift` и `PeerInfoProfileItems.swift` upstream меняет почти в каждом релизе. Правки Monogram в них — по несколько строк; при конфликте проще взять версию upstream и вставить вызов заново, чем разбирать конфликт построчно.
+
+`Postbox/SeedConfiguration.swift`: если upstream добавит в инициализатор новый параметр, параметр `preserveExistingMessageMedia` нужно сохранить и в объявлении, и в `telegramPostboxSeedConfiguration`.
+
+## Процесс обновления
+
+1. Рабочее дерево чистое, последняя сборка в CI зелёная.
+2. Получить `upstream/master`; прочитать изменения в `versions.json`, `.gitmodules`, `build-system` и в файлах из списка выше.
+3. В отдельной ветке перенести правки Monogram на новую базу (см. «История не связана с upstream»).
+4. Обновить submodules до коммитов upstream.
+5. Собрать IPA, пройти smoke test по `FEATURE_MATRIX.md`.
+6. Обновить этот файл, `PROJECT_STATUS.md`, `FEATURE_MATRIX.md` и `CHANGELOG.md`.
 
 ## Требования Telegram к форку
 

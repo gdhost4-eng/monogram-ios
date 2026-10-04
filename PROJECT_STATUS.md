@@ -1,76 +1,52 @@
 # Monogram — состояние проекта
 
-Последнее обновление: 2026-09-01
+Последнее обновление: 2026-10-04
 
 ## Текущая фаза
 
-Phase 0 — технический аудит официальной основы Telegram-iOS — завершён на уровне исходного дерева. Начаты Phase 2 и Phase 4: безопасная конфигурация Monogram и изолированный Extension Layer. Baseline build из Phase 1 ожидает совместимый macOS/Xcode-хост.
+Основа — официальный Telegram-iOS 12.9.2. Поверх неё работает слой Monogram, перенесённый 2026-09-23 из Monogram для ПК (`gdhost4-eng/monogram-pc`): режим призрака, сохранение удалённых сообщений, история изменений, одноразовые медиа, снятие запрета на копирование, скрытие рекламы и историй, ID и заметки в профилях, подтверждение отправки. Первый слой (`MonogramCore`, закладки, теги, Advanced Settings) удалён тем же коммитом `10dcbb7c` и больше не существует.
+
+IPA собирается в GitHub Actions и ставится на устройство через переподпись. Идёт доводка перенесённых функций и поиск расхождений с ПК-версией.
 
 ## Базовая версия
 
-- Upstream: `https://github.com/TelegramMessenger/Telegram-iOS.git`
-- Ветка: `master`
-- Commit: `6ad963e5b62d354da79040f388ae2b9132fb17b8`
-- Версия приложения: `12.9.2`
-- Требуемый Xcode: `26.2`
-- Требуемый Bazel: `8.4.2`
-- Требуемый macOS: `26`
-- Checkout: shallow clone; все 13 зафиксированных submodules инициализированы.
+- Upstream: `https://github.com/TelegramMessenger/Telegram-iOS.git`, ветка `master`.
+- Версия приложения: `12.9.2`, Xcode `26.2`, Bazel `8.4.2`, macOS `26` (см. `versions.json`).
+- База форка — коммит upstream «Merge branch 'master' into beta» от 2026-07-17. Подробности о хешах и о том, почему слияние с upstream не будет обычным `git merge`, — в `UPSTREAM.md`.
+- Репозиторий: `origin` → `https://github.com/gdhost4-eng/monogram-ios.git` (приватный), `upstream` → официальный.
 
-## Что подготовлено
+## Что работает и чем это подтверждено
 
-- Официальный исходный код размещён в рабочем репозитории без переписывания архитектуры.
-- Git настроен на длинные пути, необходимые для upstream assets на Windows.
-- Официальный remote переименован в `upstream`.
-- Рабочее дерево после bootstrap было чистым.
-- Найдены основные архитектурные точки account/session, Postbox, chat list, chat controller, settings, media, notifications, calls и extensions.
-- Найдены пять UI-проверок и две общие константы официального лимита аккаунтов 3/4. Нижележащие `AccountManager` и `SharedAccountContextImpl` уже используют динамические коллекции аккаунтов.
-- Созданы отдельные Bazel-модули `MonogramCore` и `MonogramUI`.
-- Добавлены versioned settings schema, typed feature registry, global/per-account persistence и experimental flags.
-- Advanced Settings подключён к существующему Settings UI.
-- Все пять найденных UI gate лимита аккаунтов 3/4 заменены единой политикой без application-level maximum; константы 3/4 удалены из `AccountUtils`.
-- Добавлены unit tests для registry, migrations, persistence model и account policy; они ещё не запущены из-за отсутствия iOS toolchain.
-- Добавлен безопасный configuration example, реальные credentials/signing paths занесены в `.gitignore`, display name изменён на Monogram.
-- Добавлен account-local слой данных для message bookmarks и peer notes/tags на штатном Postbox `OrderedItemList`: наблюдаемые списки, upsert/remove, поиск, нормализация и отсутствие искусственного лимита записей.
-- Bookmark-модель сохраняет ссылку `MessageId`, заметку и теги, но не дублирует текст/медиа приватного сообщения. Запись secret-chat, ephemeral и copy-protected references запрещена общей privacy policy.
-- Message context menu подключён к feature flag и privacy policy: для одного допустимого сообщения доступно добавление/удаление локальной закладки.
-- Добавлен экран account-local списка закладок с реактивным счётчиком в Advanced Settings и переходом к исходному сообщению через штатную навигацию.
-- Добавлен редактор локальной заметки и тегов закладки: нормализация разделителей, сохранение через Postbox transaction, открытие исходного сообщения и подтверждаемое destructive-удаление.
-- Экран закладок получил реактивный локальный поиск по заметкам и тегам, включая запросы вида `#tag`, с отдельным empty/no-results состоянием.
-- Portable source/configuration checks проверены локально: 12/12 Python unit tests проходят, example template проходит structural validation.
+- **Сборка.** Workflow `.github/workflows/build.yml` собирает `release_arm64` IPA. Последний успешный запуск — 2026-09-27, коммит `e98e6b28`. Локально на Windows проект не собирается (нет Xcode).
+- **Запуск на устройстве.** Приложение запускалось: в истории есть исправления, найденные именно в работе (`f0480c33` — зависание из-за значка удалённого сообщения, `1d6ef615` — экран чата ждал доступ к контактам). Систематического smoke test по функциям нет, поэтому в `FEATURE_MATRIX.md` статусы остаются `⚪ not tested`.
+- **Переносимые проверки.** `python -m unittest discover -s scripts/tests` — 5/5 (валидатор конфигурации).
 
-## Что пока не проверено
+## Не проверено сборкой
 
-- Генерация Xcode-проекта.
-- Компиляция simulator/device targets.
-- Запуск и runtime smoke tests.
-- Авторизация реального Telegram-аккаунта, APNs и signing.
-- Полный parity audit относительно собранного официального клиента.
+Изменения от 2026-10-04 внесены на Windows и ещё не компилировались:
+
+- режим призрака не сообщает «прослушано / просмотрено» (`ManagedSynchronizeConsumeMessageContentsOperations`, `ManagedLocalInputActivities`);
+- удалённые сообщения и история изменений переживают перепроверку истории каналов (`HistoryViewStateValidation`, хук `mergeMessageAttributes`);
+- откат временной диагностики `MonogramDebug`.
+
+Первая же сборка должна это подтвердить. Если она упадёт, искать нужно в этих трёх коммитах.
 
 ## Ограничения среды
 
-Текущий рабочий хост — Windows. На нём отсутствуют Xcode и iOS SDK, поэтому он пригоден для аудита, подготовки архитектуры, Swift-кода без сборки и документации, но не для достоверной iOS-компиляции. Baseline build должен быть выполнен на macOS 26 с Xcode 26.2. Работа, не требующая Xcode, продолжается.
+Рабочий хост — Windows без Xcode и iOS SDK: годится для правок, чтения кода и документации, но не для компиляции. Единственная проверка компиляции — GitHub Actions. По `AGENTS.md` сборка запускается только по явной просьбе, при этом workflow срабатывает на каждый push в `master` — запуск после обычного push нужно отменять.
 
-Для device build позднее потребуются собственные `api_id`, `api_hash`, Bundle Identifier, Apple Team ID и provisioning profiles. До их получения используются только шаблоны без секретов.
+Сборка подписывается временным самоподписанным сертификатом (`scripts/generate_fake_codesigning.py`) и рассчитана на переподпись при установке. После переподписи у приложения может не оказаться App Group — на этот случай в `AppDelegate` есть запасной каталог данных.
 
-## Текущая задача
+## Ближайшие задачи
 
-1. Проверить `MonogramCore`, `MonogramUI` и generated localization build на macOS/Xcode 26.2.
-2. Подключить локальные peer notes/tags к профилям пользователей, групп и каналов.
-3. Подключить редактор peer notes/tags и локальные результаты к поиску.
-4. Провести runtime stress test account switcher для 4+/10+ accounts.
-
-## Следующие задачи
-
-1. Выполнить baseline build на совместимом macOS-хосте.
-2. Запустить `//submodules/MonogramCore:MonogramCoreTests` и `//Tests/AllTests:AllTests`.
-3. Исправить найденные compile/test issues до начала широкой feature-разработки.
-4. Добавить UI и runtime tests для готовой account-aware schema bookmarks/notes/tags.
-5. Реализовать Advanced Settings search entry и остальные scopes, включая per-chat.
-6. Подготовить самостоятельные app icons Monogram.
+1. Собрать и проверить на устройстве изменения от 2026-10-04.
+2. Пройти smoke test по строкам `FEATURE_MATRIX.md` и проставить реальные статусы.
+3. Решить судьбу ежедневной проверки приватности репозитория: `AGENTS.md` на неё ссылается, но workflow `repository-privacy.yml` потерян при слиянии `daa65774`.
+4. Локализация слоя Monogram: сейчас все его строки на русском и зашиты в код.
 
 ## Известные проблемы
 
-- `origin` не настроен: URL репозитория Monogram ещё не предоставлен.
-- Build status неизвестен до появления совместимого macOS/Xcode-хоста.
-- Любые функциональные статусы в `FEATURE_MATRIX.md` остаются `⚪ not tested` до реальной проверки.
+- Автоудаление по таймеру чата выполняется на устройстве раньше, чем приходит удаление с сервера, поэтому такие сообщения не сохраняются как удалённые (в ПК-версии сохраняются).
+- У сохранённого удалённого сообщения остаются действия «Ответить», «Реакция», «Закрепить», которые сервер отклонит.
+- Настройки Monogram лежат в `UserDefaults.standard` основного приложения. Расширения (Share, Siri, уведомления) их не видят и работают так, будто режим призрака выключен.
+- `Tests/AllTests` ссылается на несуществующий `//submodules/TgVoipWebrtc:TgCallsTests`; собственных Swift-тестов у слоя Monogram нет.
