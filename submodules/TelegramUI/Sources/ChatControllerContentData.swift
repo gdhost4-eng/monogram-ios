@@ -2069,13 +2069,7 @@ extension ChatControllerImpl {
                 initialPersistentPeerDataReady
             ])
             |> map { values in
-                let isReady = !values.contains(where: { !$0 })
-                if !isReady {
-                    // Monogram debug: which part of the chat content is still loading
-                    // [peerInfo, chatLocationInfo, cachedData, history, initialData, persistentPeerData].
-                    Logger.shared.log("MonogramDebug", "chat content not ready: \(values)")
-                }
-                return isReady
+                return !values.contains(where: { !$0 })
             }
             |> filter { $0 }
             |> take(1)

@@ -651,10 +651,7 @@ extension ChatControllerImpl {
             self.presentationReady.get()
         ])
         |> map { values in
-            let isReady = !values.contains(where: { !$0 })
-            // Monogram debug: [contentData, wallpaper, presentation].
-            Logger.shared.log("MonogramDebug", "chat controller ready: \(values)")
-            return isReady
+            return !values.contains(where: { !$0 })
         }
         |> filter { $0 }
         |> take(1)
