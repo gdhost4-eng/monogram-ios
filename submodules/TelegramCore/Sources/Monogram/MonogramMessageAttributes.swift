@@ -1,5 +1,6 @@
 import Foundation
 import Postbox
+import SwiftSignalKit
 
 /// Marks a message that was deleted on the server but kept locally by Monogram.
 public final class MonogramDeletedMessageAttribute: MessageAttribute {
@@ -142,6 +143,48 @@ func monogramKeepMessageRemovedByValidation(transaction: Transaction, id: Messag
         return .update(monogramStoreMessage(currentMessage, attributes: attributes))
     })
     return true
+}
+
+/// The auto-delete timer of a cloud chat ran out for `message` (the server removes its copy at the same
+/// moment). If Monogram keeps deleted messages, marks it as deleted and drops the timer, so that the removal
+/// is not scheduled again; returns false when the message has to be removed as usual.
+func monogramKeepAutoremovedMessage(transaction: Transaction, message: Message) -> Bool {
+    guard MonogramSettings.get(.saveDeletedMessages), message.id.namespace == Namespaces.Message.Cloud, message.id.peerId.namespace != Namespaces.Peer.SecretChat else {
+        return false
+    }
+    let timestamp = Int32(Date().timeIntervalSince1970)
+    transaction.updateMessage(message.id, update: { currentMessage in
+        var attributes = currentMessage.attributes
+        attributes.removeAll(where: { $0 is AutoremoveTimeoutMessageAttribute })
+        if !attributes.contains(where: { $0 is MonogramDeletedMessageAttribute }) {
+            attributes.append(MonogramDeletedMessageAttribute(date: timestamp))
+        }
+        return .update(monogramStoreMessage(currentMessage, attributes: attributes))
+    })
+    return true
+}
+
+// A chat is scanned from the newest message down; older kept messages than this are not listed.
+private let monogramDeletedMessagesScanLimit: Int = 50000
+
+/// The messages of the chat that were deleted on the server and kept by Monogram, newest first.
+func _internal_monogramDeletedMessages(postbox: Postbox, peerId: PeerId) -> Signal<[Message], NoError> {
+    return postbox.transaction { transaction -> [Message] in
+        var ids: [MessageId] = []
+        transaction.scanMessageAttributes(peerId: peerId, namespace: Namespaces.Message.Cloud, limit: monogramDeletedMessagesScanLimit, { id, attributes in
+            if attributes.contains(where: { $0 is MonogramDeletedMessageAttribute }) {
+                ids.append(id)
+            }
+            return true
+        })
+        var result: [Message] = []
+        for id in ids {
+            if let message = transaction.getMessage(id) {
+                result.append(message)
+            }
+        }
+        return result
+    }
 }
 
 /// The Postbox seed hook `mergeMessageAttributes`: whenever a stored message is overwritten with another

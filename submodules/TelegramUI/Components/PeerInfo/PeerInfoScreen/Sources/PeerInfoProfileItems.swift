@@ -882,6 +882,15 @@ func infoItems(
                 interaction.requestLayout(animated)
             }))
         }
+        if MonogramSettings.get(.saveDeletedMessages), peerId.namespace != Namespaces.Peer.SecretChat {
+            items[.peerInfoTrailing]!.append(PeerInfoScreenLabeledValueItem(id: "monogram_deleted", label: "Удалённые сообщения", text: "Показать", textColor: .accent, action: { _, _ in
+                if let navigationController = interaction.getController()?.navigationController as? NavigationController {
+                    navigationController.pushViewController(monogramDeletedMessagesController(context: context, peerId: peerId))
+                }
+            }, requestLayout: { animated in
+                interaction.requestLayout(animated)
+            }))
+        }
     }
     
     if let peer = data.peer, let members = data.members, case let .shortList(_, memberList) = members {

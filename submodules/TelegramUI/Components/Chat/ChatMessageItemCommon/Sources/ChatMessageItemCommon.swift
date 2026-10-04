@@ -277,6 +277,10 @@ public func canAddMessageReactions(message: EngineMessage) -> Bool {
     if message.id.namespace != Namespaces.Message.Cloud {
         return false
     }
+    if message.monogramIsDeleted {
+        // Monogram: the message is gone from the server, a reaction to it would be rejected.
+        return false
+    }
     if let peer = message.peers[message.id.peerId] {
         if let _ = peer as? TelegramSecretChat {
             return false

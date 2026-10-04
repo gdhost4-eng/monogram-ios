@@ -817,6 +817,12 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         canReply = false
     }
     
+    // Monogram: a message kept after its deletion is gone from the server, which rejects a reply to it or a pin.
+    if message.monogramIsDeleted {
+        canReply = false
+        canPin = false
+    }
+    
     for media in messages[0].media {
         if let story = media as? TelegramMediaStory {
             if let story = message.associatedStories[story.storyId], story.data.isEmpty {
@@ -913,6 +919,10 @@ func contextMenuForChatPresentationInterfaceState(chatPresentationInterfaceState
         if !isAction {
             let message = messages[0]
             canEdit = canEditMessage(context: context, limitsConfiguration: limitsConfiguration, message: message)
+            if message.monogramIsDeleted {
+                // Monogram: nothing to edit on the server any more.
+                canEdit = false
+            }
         }
         
         let translationSettings: TranslationSettings

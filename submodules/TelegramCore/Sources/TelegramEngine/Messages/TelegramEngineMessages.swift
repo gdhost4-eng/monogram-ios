@@ -98,6 +98,14 @@ public extension TelegramEngine {
             return _internal_monogramReadHistoryVisibly(postbox: self.account.postbox, network: self.account.network, stateManager: self.account.stateManager, peerId: peerId)
         }
 
+        /// Monogram: the messages of the chat that were deleted on the server and kept locally, newest first.
+        public func monogramDeletedMessages(peerId: EnginePeer.Id) -> Signal<[EngineMessage], NoError> {
+            return _internal_monogramDeletedMessages(postbox: self.account.postbox, peerId: peerId)
+            |> map { messages -> [EngineMessage] in
+                return messages.map { EngineMessage($0) }
+            }
+        }
+
         public func clearCloudDraftsInteractively() -> Signal<Void, NoError> {
         	return _internal_clearCloudDraftsInteractively(postbox: self.account.postbox, network: self.account.network, accountPeerId: self.account.peerId)
         }

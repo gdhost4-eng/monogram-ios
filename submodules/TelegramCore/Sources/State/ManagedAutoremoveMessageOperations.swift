@@ -84,6 +84,8 @@ func managedAutoremoveMessageOperations(network: Network, postbox: Postbox, isRe
                     if let message = transaction.getMessage(entry.messageId) {
                         if monogramKeepExpiredSecretMessage(transaction: transaction, message: message) {
                             // Monogram: the secret chat media stays, only its timer is gone.
+                        } else if isRemove && monogramKeepAutoremovedMessage(transaction: transaction, message: message) {
+                            // Monogram: removed by the auto-delete timer of the chat, stays marked as deleted.
                         } else if message.id.peerId.namespace == Namespaces.Peer.SecretChat || isRemove {
                             _internal_deleteMessages(transaction: transaction, mediaBox: postbox.mediaBox, ids: [entry.messageId])
                         } else {

@@ -23,17 +23,16 @@ private func monogramIsSourceCopyProtected(transaction: Transaction, message: Me
     return false
 }
 
-/// The server refuses a real forward of a protected message, so with the bypass on
-/// such a forward is sent as a copy: the same text, entities and media.
+/// The server refuses a real forward of a protected message (and of a message that was deleted there and is
+/// kept only by Monogram), so such a forward is sent as a copy: the same text, entities and media.
 func monogramConvertProtectedForwards(transaction: Transaction, messages: [(Bool, EnqueueMessage)]) -> [(Bool, EnqueueMessage)] {
-    if !MonogramCopyProtection.isBypassed {
-        return messages
-    }
+    let isBypassed = MonogramCopyProtection.isBypassed
     return messages.map { item -> (Bool, EnqueueMessage) in
         guard case let .forward(sourceId, threadId, _, attributes, correlationId) = item.1, let source = transaction.getMessage(sourceId) else {
             return item
         }
-        if !monogramIsSourceCopyProtected(transaction: transaction, message: source) {
+        let sendAsCopy = source.monogramIsDeleted || (isBypassed && monogramIsSourceCopyProtected(transaction: transaction, message: source))
+        if !sendAsCopy {
             return item
         }
         var updatedAttributes = attributes
